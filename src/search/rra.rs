@@ -19,6 +19,8 @@ use crate::{abstraction::TransitionSystem, Heuristic, Task};
 /// - any state of a given transition system, and
 /// - the goal state of a given task in this transition system.
 /// The shortest paths are computed on demand by the heuristic requests.
+/// This algorithm should not be used for Timed states, as it aims to compute
+/// time-independent shortest paths between states.
 pub struct ReverseResumableAStar<TS, S, A, C, DC, T, H>
 where
     TS: TransitionSystem<S, A, DC>,
@@ -54,7 +56,11 @@ where
         let mut rra = ReverseResumableAStar {
             transition_system: transition_system.clone(),
             task: task.clone(),
-            heuristic: H::new(transition_system, task),
+            heuristic: H::new(
+                transition_system,
+                // Reverse the task for the heuristic
+                Arc::new(T::new(task.goal_state(), task.initial_state())),
+            ),
             queue: BinaryHeap::new(),
             distance: HashMap::new(),
             closed: HashSet::new(),
@@ -85,7 +91,7 @@ where
     /// Initializes the reverse search algorithm by enqueueing the goal state.
     fn init(&mut self) {
         let goal_node = SearchNode {
-            state: Arc::new(self.task.goal_state()),
+            state: self.task.goal_state(),
             cost: C::default(),
             heuristic: C::default() - C::default(),
         };
@@ -115,44 +121,44 @@ where
             }
 
             // Expand the current state and enqueue its successors if a better path has been found
-            self.transition_system
-                .for_each_reverse_action(current.state.clone(), &mut |action| {
-                    let successor_state = Arc::new(
-                        self.transition_system
-                            .reverse_transition(current.state.clone(), &action),
-                    );
-                    let successor_cost = current.cost
-                        + self
-                            .transition_system
-                            .reverse_transition_cost(current.state.clone(), &action);
+            for action in self
+                .transition_system
+                .reverse_actions_from(current.state.clone())
+            {
+                let successor_state = Arc::new(
+                    self.transition_system
+                        .reverse_transition(current.state.clone(), &action),
+                );
+                let successor_cost = current.cost
+                    + self
+                        .transition_system
+                        .reverse_transition_cost(current.state.clone(), &action);
 
-                    let improved = match self.distance.entry(successor_state.clone()) {
-                        Occupied(mut e) => {
-                            if successor_cost < *e.get() {
-                                *e.get_mut() = successor_cost;
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                        Vacant(e) => {
-                            e.insert(successor_cost);
+                let improved = match self.distance.entry(successor_state.clone()) {
+                    Occupied(mut e) => {
+                        if successor_cost < *e.get() {
+                            *e.get_mut() = successor_cost;
                             true
-                        }
-                    };
-
-                    if improved {
-                        if let Some(heuristic) =
-                            self.heuristic.get_heuristic(successor_state.clone())
-                        {
-                            self.queue.push(Reverse(SearchNode {
-                                state: successor_state,
-                                cost: successor_cost,
-                                heuristic,
-                            }));
+                        } else {
+                            false
                         }
                     }
-                });
+                    Vacant(e) => {
+                        e.insert(successor_cost);
+                        true
+                    }
+                };
+
+                if improved {
+                    if let Some(heuristic) = self.heuristic.get_heuristic(successor_state.clone()) {
+                        self.queue.push(Reverse(SearchNode {
+                            state: successor_state,
+                            cost: successor_cost,
+                            heuristic,
+                        }));
+                    }
+                }
+            }
 
             self.closed.insert(current.state.clone()); // Mark the state as closed because it has been expanded
         }
@@ -165,11 +171,11 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use ordered_float::OrderedFloat;
+    use chrono::Duration;
 
     use crate::{
         Graph, GraphEdgeId, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic,
-        SimpleTask, SimpleWorld,
+        SimpleState, SimpleTask, SimpleWorld, Task, Time,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
@@ -200,20 +206,20 @@ mod tests {
     }
 
     #[test]
-    fn test_heuristic() {
+    fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
         let task = Arc::new(SimpleTask::new(
-            GraphNodeId(0),
-            GraphNodeId(size * size - 1),
+            Arc::new(SimpleState(GraphNodeId(0))),
+            Arc::new(SimpleState(GraphNodeId(size * size - 1))),
         ));
         let mut heuristic: ReverseResumableAStar<
             SimpleWorld,
-            GraphNodeId,
+            SimpleState,
             GraphEdgeId,
-            OrderedFloat<f64>,
-            OrderedFloat<f64>,
+            Time,
+            Duration,
             SimpleTask,
             SimpleHeuristic,
         > = ReverseResumableAStar::new(transition_system, task);
@@ -222,9 +228,9 @@ mod tests {
             for y in 0..size {
                 assert_eq!(
                     heuristic
-                        .get_heuristic(Arc::new(GraphNodeId(x + y * size)))
+                        .get_heuristic(Arc::new(SimpleState(GraphNodeId(x + y * size))))
                         .unwrap(),
-                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f64)
+                    Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
                 );
             }
         }

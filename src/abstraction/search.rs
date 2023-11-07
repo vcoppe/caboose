@@ -14,7 +14,28 @@ where
 {
     /// Returns the optimal sequence of actions to complete the given task in the given transition system,
     /// or None if there is no way of completing the task.
-    fn solve(&mut self, task: Arc<T>) -> Option<Vec<A>>;
+    fn solve(&mut self, task: Arc<T>) -> Option<Solution<A, C>>;
+}
+
+/// Description of a solution to a search problem
+pub struct Solution<A, C>
+where
+    C: Default,
+{
+    pub actions: Vec<A>,
+    pub cost: C,
+}
+
+impl<A, C> Default for Solution<A, C>
+where
+    C: Default,
+{
+    fn default() -> Self {
+        Self {
+            actions: Default::default(),
+            cost: Default::default(),
+        }
+    }
 }
 
 /// Defines a heuristic function that can be used by a search algorithm,

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{slice, sync::Arc};
 
 use crate::Time;
 
@@ -6,12 +6,12 @@ use crate::Time;
 /// and transition functions that describe the result of any action applied to any state.
 /// The reverse transitions must also be described to allow using the reverse search as a heuristic.
 pub trait TransitionSystem<State, Action, Cost> {
-    fn for_each_action(&self, state: Arc<State>, f: &mut dyn ActionCallback<Action>);
+    fn actions_from(&self, state: Arc<State>) -> slice::Iter<Action>;
 
     fn transition(&self, state: Arc<State>, action: &Action) -> State;
     fn transition_cost(&self, state: Arc<State>, action: &Action) -> Cost;
 
-    fn for_each_reverse_action(&self, state: Arc<State>, f: &mut dyn ActionCallback<Action>);
+    fn reverse_actions_from(&self, state: Arc<State>) -> slice::Iter<Action>;
 
     fn reverse_transition(&self, state: Arc<State>, action: &Action) -> State;
     fn reverse_transition_cost(&self, state: Arc<State>, action: &Action) -> Cost;
@@ -31,16 +31,16 @@ impl<Action, X: FnMut(Action)> ActionCallback<Action> for X {
 /// Definition of a task in a given transition system that can then
 /// be fed to a search algorithm.
 pub trait Task<State: Eq> {
-    fn initial_state(&self) -> State;
-    fn goal_state(&self) -> State;
-    fn is_goal_state(&self, state: Arc<State>) -> bool {
-        *state == self.goal_state()
+    fn new(initial_state: Arc<State>, goal_state: Arc<State>) -> Self;
+    fn initial_state(&self) -> Arc<State>;
+    fn goal_state(&self) -> Arc<State>;
+    fn is_goal_state(&self, state: &State) -> bool {
+        *state == *self.goal_state()
     }
 }
 
 /// Trait for states that have a time dimension.
 pub trait Timed {
     fn get_time(&self) -> Time;
-
     fn set_time(&mut self, time: Time);
 }

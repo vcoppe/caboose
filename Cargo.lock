@@ -43,7 +43,6 @@ name = "ccbs"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "ordered-float",
 ]
 
 [[package]]
@@ -130,15 +129,6 @@ name = "once_cell"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
-
-[[package]]
-name = "ordered-float"
-version = "4.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "536900a8093134cf9ccf00a27deb3532421099e958d9dd431135d0c7543ca1e8"
-dependencies = [
- "num-traits",
-]
 
 [[package]]
 name = "proc-macro2"
