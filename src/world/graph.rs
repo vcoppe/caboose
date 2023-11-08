@@ -16,6 +16,7 @@ pub struct GraphEdge {
     max_speed: f64,
 }
 
+/// Definition a weighted directed graph.
 pub struct Graph {
     edges: Vec<GraphEdge>,
     nodes: Vec<GraphNode>,
@@ -71,10 +72,12 @@ impl Graph {
         &self.edges[id.0]
     }
 
+    /// Returns the edges that go into the given node.
     pub fn get_edges_in(&self, id: GraphNodeId) -> &[GraphEdgeId] {
         &self.edges_in[id.0]
     }
 
+    /// Returns the edges that go out of the given node.
     pub fn get_edges_out(&self, id: GraphNodeId) -> &[GraphEdgeId] {
         &self.edges_out[id.0]
     }

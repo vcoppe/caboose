@@ -17,14 +17,18 @@ impl SimpleWorld {
         SimpleWorld { graph }
     }
 
-    pub fn time(&self, edge: GraphEdgeId) -> Duration {
-        let edge = self.graph.get_edge(edge);
-        let from = self.graph.get_node(edge.from);
-        let to = self.graph.get_node(edge.to);
+    pub fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> Duration {
+        let from = self.graph.get_node(from);
+        let to = self.graph.get_node(to);
         let dx = to.position.0 - from.position.0;
         let dy = to.position.1 - from.position.1;
         let distance = (dx * dx + dy * dy).sqrt();
         Duration::milliseconds((distance * 1000.0).round() as i64)
+    }
+
+    pub fn time(&self, edge: GraphEdgeId) -> Duration {
+        let edge = self.graph.get_edge(edge);
+        self.time_between(edge.from, edge.to)
     }
 }
 
@@ -83,7 +87,7 @@ impl Task<SimpleState> for SimpleTask {
 }
 
 pub struct SimpleHeuristic {
-    graph: Arc<Graph>,
+    transition_system: Arc<SimpleWorld>,
     goal_state: Arc<SimpleState>,
 }
 
@@ -95,18 +99,16 @@ impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration, SimpleTask
         Self: Sized,
     {
         SimpleHeuristic {
-            graph: transition_system.graph.clone(),
+            transition_system,
             goal_state: task.goal_state(),
         }
     }
 
     fn get_heuristic(&mut self, state: Arc<SimpleState>) -> Option<Duration> {
-        let goal_node = self.graph.get_node(self.goal_state.0);
-        let state_node = self.graph.get_node(state.0);
-        let dx = goal_node.position.0 - state_node.position.0;
-        let dy = goal_node.position.1 - state_node.position.1;
-        let distance = (dx * dx + dy * dy).sqrt();
-        Some(Duration::milliseconds((distance * 1000.0).round() as i64))
+        Some(
+            self.transition_system
+                .time_between(state.0, self.goal_state.0),
+        )
     }
 }
 
@@ -198,7 +200,7 @@ impl Task<SimpleTimedState> for SimpleTimedTask {
 }
 
 pub struct SimpleTimedHeuristic {
-    graph: Arc<Graph>,
+    transition_system: Arc<SimpleWorld>,
     goal_state: Arc<SimpleTimedState>,
 }
 
@@ -210,18 +212,16 @@ impl Heuristic<SimpleWorld, SimpleTimedState, GraphEdgeId, Time, Duration, Simpl
         Self: Sized,
     {
         SimpleTimedHeuristic {
-            graph: transition_system.graph.clone(),
+            transition_system,
             goal_state: task.goal_state(),
         }
     }
 
     fn get_heuristic(&mut self, state: Arc<SimpleTimedState>) -> Option<Duration> {
-        let goal_node = self.graph.get_node(self.goal_state.node);
-        let state_node = self.graph.get_node(state.node);
-        let dx = goal_node.position.0 - state_node.position.0;
-        let dy = goal_node.position.1 - state_node.position.1;
-        let distance = (dx * dx + dy * dy).sqrt();
-        Some(Duration::milliseconds((distance * 1000.0).round() as i64))
+        Some(
+            self.transition_system
+                .time_between(state.node, self.goal_state.node),
+        )
     }
 }
 

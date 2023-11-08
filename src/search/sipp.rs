@@ -13,9 +13,20 @@ use std::{
 
 use chrono::Duration;
 
-use crate::{
-    Heuristic, Interval, SearchNode, Solution, Solver, Task, Time, Timed, TransitionSystem,
-};
+use crate::{Heuristic, Interval, SearchNode, Solution, Task, Time, Timed, TransitionSystem};
+
+struct SippConfig<TS, S, A, T, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Debug + Copy + Hash + Eq + Timed,
+    A: Copy,
+    T: Task<S>,
+    H: Heuristic<TS, S, A, Time, Duration, T>,
+{
+    task: Arc<T>,
+    heuristic: H,
+    _phantom: PhantomData<(TS, S, A)>,
+}
 
 #[derive(PartialEq, Eq, Hash)]
 struct SippState<S>
@@ -39,26 +50,11 @@ where
     H: Heuristic<TS, S, A, Time, Duration, T>,
 {
     transition_system: Arc<TS>,
-    heuristic: Option<H>,
     queue: BinaryHeap<Reverse<SearchNode<SippState<S>, Time, Duration>>>,
     distance: HashMap<Arc<SippState<S>>, Time>,
     closed: HashSet<Arc<SippState<S>>>,
     parent: HashMap<Arc<SippState<S>>, (A, Arc<SippState<S>>)>,
-    _phantom: PhantomData<(A, T)>,
-}
-
-impl<TS, S, A, T, H> Solver<TS, S, A, Time, Duration, T, H>
-    for SafeIntervalPathPlanning<TS, S, A, T, H>
-where
-    TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq + Timed,
-    A: Copy,
-    T: Task<S>,
-    H: Heuristic<TS, S, A, Time, Duration, T>,
-{
-    fn solve(&mut self, task: Arc<T>) -> Option<Solution<A, Time>> {
-        self._solve(task)
-    }
+    _phantom: PhantomData<(A, T, H)>,
 }
 
 impl<TS, S, A, T, H> SafeIntervalPathPlanning<TS, S, A, T, H>
@@ -72,7 +68,6 @@ where
     fn new(transition_system: Arc<TS>) -> Self {
         SafeIntervalPathPlanning {
             transition_system,
-            heuristic: None,
             queue: BinaryHeap::new(),
             distance: HashMap::new(),
             closed: HashSet::new(),
@@ -81,15 +76,24 @@ where
         }
     }
 
+    /// Applies the algorithm to the given configuration.
+    pub fn solve(&mut self, config: &mut SippConfig<TS, S, A, T, H>) -> Option<Solution<A, Time>> {
+        if !self.init(config) {
+            return None;
+        }
+
+        self.find_path(config).map(|g| self.get_solution(g))
+    }
+
     /// Initializes the search algorithm by enqueueing the initial state.
     /// Returns true if the initial state belongs to a safe interval, and false otherwise.
-    fn init(&mut self, task: Arc<T>) -> bool {
+    fn init(&mut self, config: &SippConfig<TS, S, A, T, H>) -> bool {
         self.queue.clear();
         self.distance.clear();
         self.closed.clear();
         self.parent.clear();
 
-        let initial_state = task.initial_state();
+        let initial_state = config.task.initial_state();
         let initial_time = initial_state.get_time();
 
         let safe_intervals = self.get_safe_intervals(&initial_state);
@@ -117,33 +121,26 @@ where
             .insert(initial_node.state.clone(), initial_node.cost);
         self.queue.push(Reverse(initial_node));
 
-        self.heuristic = Some(H::new(self.transition_system.clone(), task));
-
         true
     }
 
-    fn _solve(&mut self, task: Arc<T>) -> Option<Solution<A, Time>> {
-        if !self.init(task.clone()) {
-            return None;
-        }
-
-        self.find_path(task.as_ref()).map(|g| self.get_solution(g))
-    }
-
-    fn find_path(&mut self, task: &T) -> Option<Arc<SippState<S>>> {
+    fn find_path(&mut self, config: &mut SippConfig<TS, S, A, T, H>) -> Option<Arc<SippState<S>>> {
         while let Some(Reverse(current)) = self.queue.pop() {
             if current.cost > self.distance[current.state.as_ref()] {
                 // A better path has already been found
                 continue;
             }
 
-            if task.is_goal_state(current.state.internal_state.as_ref()) {
+            if config
+                .task
+                .is_goal_state(current.state.internal_state.as_ref())
+            {
                 // The optimal distance has been found
                 return Some(current.state);
             }
 
             // Expand the current state and enqueue its successors
-            for successor in self.get_successors(current.state.clone()) {
+            for successor in self.get_successors(config, current.state.clone()) {
                 self.distance
                     .insert(successor.state.clone(), successor.cost);
                 self.queue.push(Reverse(successor));
@@ -157,6 +154,7 @@ where
 
     fn get_successors(
         &mut self,
+        config: &mut SippConfig<TS, S, A, T, H>,
         current: Arc<SippState<S>>,
     ) -> Vec<SearchNode<SippState<S>, Time, Duration>> {
         let mut successors = vec![];
@@ -173,15 +171,13 @@ where
                 .transition_system
                 .transition_cost(current.internal_state.clone(), &action);
 
-            let mut heuristic = Duration::seconds(0);
-            if let Some(heuristic_function) = self.heuristic.as_mut() {
-                let heuristic_value =
-                    heuristic_function.get_heuristic(generic_successor_state.clone());
-                if heuristic_value.is_none() {
-                    continue; // Goal state is not reachable from this state
-                }
-                heuristic = heuristic_value.unwrap();
+            let heuristic = config
+                .heuristic
+                .get_heuristic(generic_successor_state.clone());
+            if heuristic.is_none() {
+                continue; // Goal state is not reachable from this state
             }
+            let heuristic = heuristic.unwrap();
 
             let collision_intervals = self.get_collision_intervals(*action);
 
@@ -300,8 +296,8 @@ mod tests {
     use chrono::Duration;
 
     use crate::{
-        Graph, GraphEdgeId, GraphNodeId, SimpleTimedState, SimpleTimedTask, SimpleWorld, Solver,
-        Task, Time, TimedHeuristic,
+        search::sipp::SippConfig, Graph, GraphEdgeId, GraphNodeId, Heuristic, SimpleTimedState,
+        SimpleTimedTask, SimpleWorld, Task, Time, TimedHeuristic,
     };
 
     use super::SafeIntervalPathPlanning;
@@ -345,7 +341,7 @@ mod tests {
             GraphEdgeId,
             SimpleTimedTask,
             TimedHeuristic,
-        > = SafeIntervalPathPlanning::new(transition_system);
+        > = SafeIntervalPathPlanning::new(transition_system.clone());
 
         for x in 0..size {
             for y in 0..size {
@@ -359,9 +355,14 @@ mod tests {
                         time: initial_time,
                     }),
                 ));
+                let mut config = SippConfig {
+                    task: task.clone(),
+                    heuristic: TimedHeuristic::new(transition_system.clone(), task),
+                    _phantom: Default::default(),
+                };
 
                 assert_eq!(
-                    solver.solve(task.clone()).unwrap().cost,
+                    solver.solve(&mut config).unwrap().cost,
                     initial_time
                         + Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
                 );

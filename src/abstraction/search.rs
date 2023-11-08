@@ -2,21 +2,6 @@ use std::{hash::Hash, ops::Add, sync::Arc};
 
 use crate::{Task, TransitionSystem};
 
-/// Generic definition of a search algorithm that finds the optimal sequence of actions
-/// to complete a given task in a given transition system, using a given heuristic.
-pub trait Solver<TS, S, A, C, DC, T, H>
-where
-    TS: TransitionSystem<S, A, DC>,
-    S: Hash + Eq,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default,
-    T: Task<S>,
-    H: Heuristic<TS, S, A, C, DC, T>,
-{
-    /// Returns the optimal sequence of actions to complete the given task in the given transition system,
-    /// or None if there is no way of completing the task.
-    fn solve(&mut self, task: Arc<T>) -> Option<Solution<A, C>>;
-}
-
 /// Description of a solution to a search problem
 pub struct Solution<A, C>
 where
