@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Add;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::{
     cmp::Reverse,
     collections::{
@@ -33,9 +33,10 @@ where
     transition_system: Arc<TS>,
     task: Arc<T>,
     heuristic: H,
-    queue: BinaryHeap<Reverse<SearchNode<S, C, DC>>>,
-    distance: HashMap<Arc<S>, C>,
-    closed: HashSet<Arc<S>>,
+    queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
+    distance: RwLock<HashMap<Arc<S>, C>>,
+    closed: RwLock<HashSet<Arc<S>>>,
+    initial_cost: C,
     _phantom: PhantomData<A>,
 }
 
@@ -61,21 +62,18 @@ where
                 // Reverse the task for the heuristic
                 Arc::new(T::new(task.goal_state(), task.initial_state())),
             ),
-            queue: BinaryHeap::new(),
-            distance: HashMap::new(),
-            closed: HashSet::new(),
+            queue: Mutex::new(BinaryHeap::new()),
+            distance: RwLock::new(HashMap::new()),
+            closed: RwLock::new(HashSet::new()),
+            initial_cost: C::default(),
             _phantom: PhantomData::default(),
         };
         rra.init();
         rra
     }
 
-    fn get_heuristic(&mut self, state: Arc<S>) -> Option<DC> {
-        if self.find_path(state.clone()) {
-            Some(self.distance[&state] - C::default())
-        } else {
-            None
-        }
+    fn get_heuristic(&self, state: Arc<S>) -> Option<DC> {
+        self.find_path(state.clone())
     }
 }
 
@@ -97,27 +95,35 @@ where
         };
 
         self.distance
+            .write()
+            .unwrap()
             .insert(goal_node.state.clone(), goal_node.cost);
-        self.queue.push(Reverse(goal_node));
+        self.queue.get_mut().unwrap().push(Reverse(goal_node));
     }
 
     /// Computes the shortest path between the given state and the goal state,
     /// or returns directly if it has already been computed.
-    fn find_path(&mut self, state: Arc<S>) -> bool {
-        if self.closed.contains(&state) {
+    fn find_path(&self, state: Arc<S>) -> Option<DC> {
+        if self.closed.read().unwrap().contains(&state) {
             // The distance has already been computed
-            return true;
+            return Some(self.distance.read().unwrap()[&state] - self.initial_cost);
         }
 
-        while let Some(Reverse(current)) = self.queue.pop() {
-            if current.cost > self.distance[&current.state] {
+        let mut queue = self.queue.lock().unwrap(); // Lock the queue to avoid concurrent executions of the algorithm
+        if self.closed.read().unwrap().contains(&state) {
+            // Check if the distance has been computed while waiting for the lock
+            return Some(self.distance.read().unwrap()[&state] - self.initial_cost);
+        }
+
+        while let Some(Reverse(current)) = queue.pop() {
+            if current.cost > self.distance.read().unwrap()[&current.state] {
                 // A better path has already been found
                 continue;
             }
 
             if current.state == state {
                 // The optimal distance has been found
-                return true;
+                return Some(current.cost - self.initial_cost);
             }
 
             // Expand the current state and enqueue its successors if a better path has been found
@@ -134,7 +140,12 @@ where
                         .transition_system
                         .reverse_transition_cost(current.state.clone(), &action);
 
-                let improved = match self.distance.entry(successor_state.clone()) {
+                let improved = match self
+                    .distance
+                    .write()
+                    .unwrap()
+                    .entry(successor_state.clone())
+                {
                     Occupied(mut e) => {
                         if successor_cost < *e.get() {
                             *e.get_mut() = successor_cost;
@@ -151,7 +162,7 @@ where
 
                 if improved {
                     if let Some(heuristic) = self.heuristic.get_heuristic(successor_state.clone()) {
-                        self.queue.push(Reverse(SearchNode {
+                        queue.push(Reverse(SearchNode {
                             state: successor_state,
                             cost: successor_cost,
                             heuristic,
@@ -160,10 +171,10 @@ where
                 }
             }
 
-            self.closed.insert(current.state.clone()); // Mark the state as closed because it has been expanded
+            self.closed.write().unwrap().insert(current.state.clone()); // Mark the state as closed because it has been expanded
         }
 
-        false
+        None
     }
 }
 
@@ -214,7 +225,7 @@ mod tests {
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
         ));
-        let mut heuristic: ReverseResumableAStar<
+        let heuristic: ReverseResumableAStar<
             SimpleWorld,
             SimpleState,
             GraphEdgeId,

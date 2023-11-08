@@ -99,7 +99,7 @@ impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration, SimpleTask
         }
     }
 
-    fn get_heuristic(&mut self, state: Arc<SimpleState>) -> Option<Duration> {
+    fn get_heuristic(&self, state: Arc<SimpleState>) -> Option<Duration> {
         Some(
             self.transition_system
                 .time_between(state.0, self.goal_state.0),

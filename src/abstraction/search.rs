@@ -39,7 +39,7 @@ where
 
     /// Returns the heuristic value for the given state,
     /// or None if the goal state is not reachable from that state.
-    fn get_heuristic(&mut self, state: Arc<S>) -> Option<DC>;
+    fn get_heuristic(&self, state: Arc<S>) -> Option<DC>;
 }
 
 /// Generic definition of a search node and the associated ordering functions

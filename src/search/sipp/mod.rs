@@ -1,5 +1,5 @@
-mod gsipp;
+mod lsipp;
 mod sipp;
 
-pub use gsipp::*;
+pub use lsipp::*;
 pub use sipp::*;

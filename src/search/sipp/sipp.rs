@@ -15,111 +15,6 @@ use chrono::Duration;
 
 use crate::{Heuristic, Interval, SearchNode, Solution, Task, Time, TransitionSystem};
 
-/// Input configuration for the Safe Interval Path Planning algorithm.
-struct SippConfig<TS, S, A, T, H>
-where
-    TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
-    A: Copy,
-    T: Task<S>,
-    H: Heuristic<TS, S, A, Time, Duration, T>,
-{
-    initial_time: Time,
-    task: Arc<T>,
-    heuristic: H,
-    _phantom: PhantomData<(TS, S, A)>,
-}
-
-impl<TS, S, A, T, H> SippConfig<TS, S, A, T, H>
-where
-    TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
-    A: Copy,
-    T: Task<S>,
-    H: Heuristic<TS, S, A, Time, Duration, T>,
-{
-    pub fn new(initial_time: Time, task: Arc<T>, heuristic: H) -> Self {
-        SippConfig {
-            initial_time,
-            task,
-            heuristic,
-            _phantom: PhantomData::default(),
-        }
-    }
-}
-
-/// Input configuration for the Generalized Safe Interval Path Planning algorithm.
-struct GeneralizedSippConfig<TS, S, A, T, H>
-where
-    TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
-    A: Copy,
-    T: Task<S>,
-    H: Heuristic<TS, S, A, Time, Duration, T>,
-{
-    task: Arc<SippTask<S, T>>,
-    heuristic: H,
-    single_path: bool,
-    _phantom: PhantomData<(TS, S, A, T)>,
-}
-
-impl<TS, S, A, T, H> GeneralizedSippConfig<TS, S, A, T, H>
-where
-    TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
-    A: Copy,
-    T: Task<S>,
-    H: Heuristic<TS, S, A, Time, Duration, T>,
-{
-    pub fn new(task: Arc<SippTask<S, T>>, heuristic: H, single_path: bool) -> Self {
-        GeneralizedSippConfig {
-            task,
-            heuristic,
-            single_path,
-            _phantom: PhantomData::default(),
-        }
-    }
-}
-
-/// State wrapper for the Safe Interval Path Planning algorithm that extends
-/// a given state definition with a safe interval.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-struct SippState<S>
-where
-    S: Debug + Eq,
-{
-    safe_interval_id: usize,
-    safe_interval: Interval,
-    internal_state: Arc<S>,
-}
-
-/// Task wrapper for the Safe Interval Path Planning algorithm that extends
-/// a given task definition with all SIPP states that correspong to it.
-struct SippTask<S, T>
-where
-    S: Debug + Hash + Eq,
-    T: Task<S>,
-{
-    initial_times: Vec<Time>,
-    initial_states: Vec<Arc<SippState<S>>>,
-    goal_state: Arc<SippState<S>>,
-    internal_task: Arc<T>,
-}
-
-impl<S, T> SippTask<S, T>
-where
-    S: Debug + Hash + Eq,
-    T: Task<S>,
-{
-    fn is_goal(&self, state: &SearchNode<SippState<S>, Time, Duration>) -> bool {
-        state.cost >= self.goal_state.safe_interval.start
-            && state.cost <= self.goal_state.safe_interval.end
-            && self
-                .internal_task
-                .is_goal_state(state.state.internal_state.as_ref())
-    }
-}
-
 /// Implementation of the Safe Interval Path Planning algorithm that computes
 /// the optimal sequence of actions to complete a given task in a given transition system,
 /// while avoiding conflicts with other agents in the same environment.
@@ -175,13 +70,11 @@ where
         }
 
         let initial_state = Arc::new(SippState {
-            safe_interval_id: 0,
             safe_interval: *safe_interval.unwrap(),
             internal_state: initial_state,
         });
 
         let goal_state = Arc::new(SippState {
-            safe_interval_id: 0,
             safe_interval: Interval::default(),
             internal_state: goal_state,
         });
@@ -193,7 +86,7 @@ where
             internal_task: config.task.clone(),
         });
 
-        let mut config = GeneralizedSippConfig::new(sipp_task, config.heuristic, true);
+        let mut config = GeneralizedSippConfig::new(sipp_task, config.heuristic.clone(), true);
 
         self.solve_generalized(&mut config).pop()
     }
@@ -304,11 +197,7 @@ where
 
             // Try to reach any of the safe intervals of the destination state
             // and add the corresponding successors to the queue if a better path has been found
-            for (safe_interval_id, safe_interval) in self
-                .get_safe_intervals(successor_state.as_ref())
-                .iter()
-                .enumerate()
-            {
+            for safe_interval in self.get_safe_intervals(successor_state.as_ref()).iter() {
                 let mut successor_cost = current.cost + transition_cost;
 
                 if successor_cost > safe_interval.end {
@@ -347,7 +236,6 @@ where
                 }
 
                 let successor_state = Arc::new(SippState {
-                    safe_interval_id,
                     safe_interval: *safe_interval,
                     internal_state: successor_state.clone(),
                 });
@@ -408,6 +296,110 @@ where
 
     fn get_collision_intervals(&self, _action: A) -> Vec<Interval> {
         vec![]
+    }
+}
+
+/// Input configuration for the Safe Interval Path Planning algorithm.
+struct SippConfig<TS, S, A, T, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Debug + Copy + Hash + Eq,
+    A: Copy,
+    T: Task<S>,
+    H: Heuristic<TS, S, A, Time, Duration, T>,
+{
+    initial_time: Time,
+    task: Arc<T>,
+    heuristic: Arc<H>,
+    _phantom: PhantomData<(TS, S, A)>,
+}
+
+impl<TS, S, A, T, H> SippConfig<TS, S, A, T, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Debug + Copy + Hash + Eq,
+    A: Copy,
+    T: Task<S>,
+    H: Heuristic<TS, S, A, Time, Duration, T>,
+{
+    pub fn new(initial_time: Time, task: Arc<T>, heuristic: Arc<H>) -> Self {
+        SippConfig {
+            initial_time,
+            task,
+            heuristic,
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+/// Input configuration for the Generalized Safe Interval Path Planning algorithm.
+struct GeneralizedSippConfig<TS, S, A, T, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Debug + Copy + Hash + Eq,
+    A: Copy,
+    T: Task<S>,
+    H: Heuristic<TS, S, A, Time, Duration, T>,
+{
+    task: Arc<SippTask<S, T>>,
+    heuristic: Arc<H>,
+    single_path: bool,
+    _phantom: PhantomData<(TS, S, A, T)>,
+}
+
+impl<TS, S, A, T, H> GeneralizedSippConfig<TS, S, A, T, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Debug + Copy + Hash + Eq,
+    A: Copy,
+    T: Task<S>,
+    H: Heuristic<TS, S, A, Time, Duration, T>,
+{
+    pub fn new(task: Arc<SippTask<S, T>>, heuristic: Arc<H>, single_path: bool) -> Self {
+        GeneralizedSippConfig {
+            task,
+            heuristic,
+            single_path,
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+/// State wrapper for the Safe Interval Path Planning algorithm that extends
+/// a given state definition with a safe interval.
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+struct SippState<S>
+where
+    S: Debug + Eq,
+{
+    safe_interval: Interval,
+    internal_state: Arc<S>,
+}
+
+/// Task wrapper for the Safe Interval Path Planning algorithm that extends
+/// a given task definition with all SIPP states that correspong to it.
+struct SippTask<S, T>
+where
+    S: Debug + Hash + Eq,
+    T: Task<S>,
+{
+    initial_times: Vec<Time>,
+    initial_states: Vec<Arc<SippState<S>>>,
+    goal_state: Arc<SippState<S>>,
+    internal_task: Arc<T>,
+}
+
+impl<S, T> SippTask<S, T>
+where
+    S: Debug + Hash + Eq,
+    T: Task<S>,
+{
+    fn is_goal(&self, state: &SearchNode<SippState<S>, Time, Duration>) -> bool {
+        state.cost >= self.goal_state.safe_interval.start
+            && state.cost <= self.goal_state.safe_interval.end
+            && self
+                .internal_task
+                .is_goal_state(state.state.internal_state.as_ref())
     }
 }
 
@@ -482,15 +474,13 @@ mod tests {
                 let mut config = SippConfig::new(
                     initial_time,
                     task.clone(),
-                    ReverseResumableAStar::new(transition_system.clone(), task),
+                    Arc::new(ReverseResumableAStar::new(transition_system.clone(), task)),
                 );
-
                 assert_eq!(
                     solver.solve(&mut config).unwrap().cost,
                     initial_time
                         + Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
                 );
-                break;
             }
         }
     }
