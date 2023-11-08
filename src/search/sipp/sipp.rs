@@ -31,11 +31,39 @@ where
 #[derive(PartialEq, Eq, Hash)]
 struct SippState<S>
 where
-    S: Debug + Timed,
+    S: Debug + Eq + Timed,
 {
     safe_interval_id: usize,
     safe_interval: Interval,
     internal_state: Arc<S>,
+}
+
+struct SippTask<S>
+where
+    S: Debug + Eq + Timed,
+{
+    initial_state: Arc<SippState<S>>,
+    goal_state: Arc<SippState<S>>,
+}
+
+impl<S> Task<SippState<S>> for SippTask<S>
+where
+    S: Debug + Eq + Timed,
+{
+    fn new(initial_state: Arc<SippState<S>>, goal_state: Arc<SippState<S>>) -> Self {
+        SippTask {
+            initial_state,
+            goal_state,
+        }
+    }
+
+    fn initial_state(&self) -> Arc<SippState<S>> {
+        self.initial_state.clone()
+    }
+
+    fn goal_state(&self) -> Arc<SippState<S>> {
+        self.goal_state.clone()
+    }
 }
 
 /// Implementation of the Safe Interval Path Planning algorithm that computes
@@ -296,8 +324,8 @@ mod tests {
     use chrono::Duration;
 
     use crate::{
-        search::sipp::SippConfig, Graph, GraphEdgeId, GraphNodeId, Heuristic, SimpleTimedState,
-        SimpleTimedTask, SimpleWorld, Task, Time, TimedHeuristic,
+        search::sipp::sipp::SippConfig, Graph, GraphEdgeId, GraphNodeId, Heuristic,
+        SimpleTimedState, SimpleTimedTask, SimpleWorld, Task, Time, TimedHeuristic,
     };
 
     use super::SafeIntervalPathPlanning;
