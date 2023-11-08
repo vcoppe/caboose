@@ -4,7 +4,7 @@ use chrono::Duration;
 
 use crate::{
     DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, SafeIntervalPathPlanning,
-    SippConfig, SippState, SippTask, Solution, Task, Time, TransitionSystem,
+    SippConfig, SippState, SippTask, Solution, State, Task, Time, TransitionSystem,
 };
 
 /// Implementation of Safe Interval Path Planning algorithm that supports landmarks
@@ -12,7 +12,7 @@ use crate::{
 pub struct SafeIntervalPathPlanningWithLandmarks<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Debug + Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -25,7 +25,7 @@ where
 impl<TS, S, A, H> SafeIntervalPathPlanningWithLandmarks<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Debug + Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -238,7 +238,7 @@ where
 pub struct LSippConfig<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -253,7 +253,7 @@ where
 impl<TS, S, A, H> LSippConfig<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {

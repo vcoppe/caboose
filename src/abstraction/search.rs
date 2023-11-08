@@ -2,7 +2,7 @@ use std::{hash::Hash, marker::PhantomData, ops::Add, sync::Arc};
 
 use chrono::Duration;
 
-use crate::{Task, Time, TransitionSystem};
+use crate::{State, Task, Time, TransitionSystem};
 
 /// Description of a solution to a search problem
 #[derive(Debug)]
@@ -46,7 +46,7 @@ where
 pub struct DifferentialHeuristic<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Hash + Eq,
+    S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     task: Arc<Task<S>>,
@@ -58,7 +58,7 @@ where
 impl<TS, S, A, H> DifferentialHeuristic<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Hash + Eq,
+    S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     pub fn new(task: Arc<Task<S>>, pivot: Arc<S>, heuristic_to_pivot: Arc<H>) -> Self {
@@ -74,7 +74,7 @@ where
 impl<TS, S, A, H> Heuristic<TS, S, A, Time, Duration> for DifferentialHeuristic<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Hash + Eq,
+    S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     fn get_heuristic(&self, state: Arc<S>) -> Option<Duration> {

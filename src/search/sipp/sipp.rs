@@ -13,7 +13,7 @@ use std::{
 
 use chrono::Duration;
 
-use crate::{Heuristic, Interval, SearchNode, Solution, Task, Time, TransitionSystem};
+use crate::{Heuristic, Interval, SearchNode, Solution, State, Task, Time, TransitionSystem};
 
 /// Implementation of the Safe Interval Path Planning algorithm that computes
 /// the optimal sequence of actions to complete a given task in a given transition system,
@@ -36,7 +36,7 @@ where
 impl<TS, S, A, H> SafeIntervalPathPlanning<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -325,7 +325,7 @@ where
 pub struct SippConfig<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -339,7 +339,7 @@ where
 impl<TS, S, A, H> SippConfig<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -363,7 +363,7 @@ where
 pub struct GeneralizedSippConfig<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -376,7 +376,7 @@ where
 impl<TS, S, A, H> GeneralizedSippConfig<TS, S, A, H>
 where
     TS: TransitionSystem<S, A, Duration>,
-    S: Debug + Copy + Hash + Eq,
+    S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
@@ -405,7 +405,7 @@ where
 /// a given task definition with all SIPP states that correspong to it.
 pub struct SippTask<S>
 where
-    S: Debug + Hash + Eq,
+    S: State + Debug + Hash + Eq,
 {
     initial_times: Vec<Time>,
     initial_states: Vec<Arc<SippState<S>>>,
@@ -415,7 +415,7 @@ where
 
 impl<S> SippTask<S>
 where
-    S: Debug + Hash + Eq,
+    S: State + Debug + Hash + Eq,
 {
     pub fn new(
         initial_times: Vec<Time>,

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 
-use crate::{Graph, GraphEdgeId, GraphNodeId, Heuristic, Task, Time, TransitionSystem};
+use crate::{Graph, GraphEdgeId, GraphNodeId, Heuristic, State, Task, Time, TransitionSystem};
 
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
@@ -31,6 +31,12 @@ impl SimpleWorld {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct SimpleState(pub GraphNodeId);
+
+impl State for SimpleState {
+    fn is_equivalent(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
     fn actions_from(&self, state: Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {

@@ -11,8 +11,8 @@ use std::{
     ops::Sub,
 };
 
-use crate::SearchNode;
 use crate::{abstraction::TransitionSystem, Heuristic, Task};
+use crate::{SearchNode, State};
 
 /// Implementation of the Reverse Resumable A* algorithm
 /// that computes the shortest path between:
@@ -24,7 +24,7 @@ use crate::{abstraction::TransitionSystem, Heuristic, Task};
 pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, DC>,
-    S: Hash + Eq,
+    S: State + Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
@@ -43,7 +43,7 @@ where
 impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, DC>,
-    S: Hash + Eq,
+    S: State + Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
@@ -56,7 +56,7 @@ where
 impl<TS, S, A, C, DC, H> ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, DC>,
-    S: Hash + Eq,
+    S: State + Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
