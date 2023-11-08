@@ -58,38 +58,13 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
     }
 }
 
-#[derive(Clone)]
-pub struct SimpleTask {
-    initial_state: Arc<SimpleState>,
-    goal_state: Arc<SimpleState>,
-}
-
-impl Task<SimpleState> for SimpleTask {
-    fn new(initial_state: Arc<SimpleState>, goal_state: Arc<SimpleState>) -> Self {
-        SimpleTask {
-            initial_state,
-            goal_state,
-        }
-    }
-
-    fn initial_state(&self) -> Arc<SimpleState> {
-        self.initial_state.clone()
-    }
-
-    fn goal_state(&self) -> Arc<SimpleState> {
-        self.goal_state.clone()
-    }
-}
-
 pub struct SimpleHeuristic {
     transition_system: Arc<SimpleWorld>,
     goal_state: Arc<SimpleState>,
 }
 
-impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration, SimpleTask>
-    for SimpleHeuristic
-{
-    fn new(transition_system: Arc<SimpleWorld>, task: Arc<SimpleTask>) -> Self
+impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration> for SimpleHeuristic {
+    fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState>>) -> Self
     where
         Self: Sized,
     {

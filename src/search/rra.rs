@@ -21,17 +21,16 @@ use crate::{abstraction::TransitionSystem, Heuristic, Task};
 /// The shortest paths are computed on demand by the heuristic requests.
 /// This algorithm should not be used for Timed states, as it aims to compute
 /// time-independent shortest paths between states.
-pub struct ReverseResumableAStar<TS, S, A, C, DC, T, H>
+pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, DC>,
     S: Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
-    T: Task<S> + Clone,
-    H: Heuristic<TS, S, A, C, DC, T>,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
-    task: Arc<T>,
+    task: Arc<Task<S>>,
     heuristic: H,
     queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
     distance: RwLock<HashMap<Arc<S>, C>>,
@@ -40,17 +39,15 @@ where
     _phantom: PhantomData<A>,
 }
 
-impl<TS, S, A, C, DC, T, H> Heuristic<TS, S, A, C, DC, T>
-    for ReverseResumableAStar<TS, S, A, C, DC, T, H>
+impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, DC>,
     S: Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
-    T: Task<S> + Clone,
-    H: Heuristic<TS, S, A, C, DC, T>,
+    H: Heuristic<TS, S, A, C, DC>,
 {
-    fn new(transition_system: Arc<TS>, task: Arc<T>) -> Self
+    fn new(transition_system: Arc<TS>, task: Arc<Task<S>>) -> Self
     where
         Self: Sized,
     {
@@ -60,7 +57,7 @@ where
             heuristic: H::new(
                 transition_system,
                 // Reverse the task for the heuristic
-                Arc::new(T::new(task.goal_state(), task.initial_state())),
+                Arc::new(Task::new(task.goal_state(), task.initial_state())),
             ),
             queue: Mutex::new(BinaryHeap::new()),
             distance: RwLock::new(HashMap::new()),
@@ -77,14 +74,13 @@ where
     }
 }
 
-impl<TS, S, A, C, DC, T, H> ReverseResumableAStar<TS, S, A, C, DC, T, H>
+impl<TS, S, A, C, DC, H> ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, DC>,
     S: Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
-    T: Task<S> + Clone,
-    H: Heuristic<TS, S, A, C, DC, T>,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     /// Initializes the reverse search algorithm by enqueueing the goal state.
     fn init(&mut self) {
@@ -186,7 +182,7 @@ mod tests {
 
     use crate::{
         Graph, GraphEdgeId, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic,
-        SimpleState, SimpleTask, SimpleWorld, Task, Time,
+        SimpleState, SimpleWorld, Task, Time,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
@@ -221,7 +217,7 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let task = Arc::new(SimpleTask::new(
+        let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
         ));
@@ -231,7 +227,6 @@ mod tests {
             GraphEdgeId,
             Time,
             Duration,
-            SimpleTask,
             SimpleHeuristic,
         > = ReverseResumableAStar::new(transition_system, task);
 

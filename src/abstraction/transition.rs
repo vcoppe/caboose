@@ -28,11 +28,28 @@ impl<Action, X: FnMut(Action)> ActionCallback<Action> for X {
 
 /// Definition of a task in a given transition system that can then
 /// be fed to a search algorithm.
-pub trait Task<State: Eq> {
-    fn new(initial_state: Arc<State>, goal_state: Arc<State>) -> Self;
-    fn initial_state(&self) -> Arc<State>;
-    fn goal_state(&self) -> Arc<State>;
-    fn is_goal_state(&self, state: &State) -> bool {
+pub struct Task<State: Eq> {
+    initial_state: Arc<State>,
+    goal_state: Arc<State>,
+}
+
+impl<State: Eq> Task<State> {
+    pub fn new(initial_state: Arc<State>, goal_state: Arc<State>) -> Self {
+        Self {
+            initial_state,
+            goal_state,
+        }
+    }
+
+    pub fn initial_state(&self) -> Arc<State> {
+        self.initial_state.clone()
+    }
+
+    pub fn goal_state(&self) -> Arc<State> {
+        self.goal_state.clone()
+    }
+
+    pub fn is_goal_state(&self, state: &State) -> bool {
         *state == *self.goal_state()
     }
 }

@@ -3,20 +3,22 @@ use std::{hash::Hash, ops::Add, sync::Arc};
 use crate::{Task, TransitionSystem};
 
 /// Description of a solution to a search problem
-pub struct Solution<A, C>
+pub struct Solution<S, A, C>
 where
     C: Default,
 {
+    pub states: Vec<S>,
     pub actions: Vec<A>,
     pub cost: C,
 }
 
-impl<A, C> Default for Solution<A, C>
+impl<S, A, C> Default for Solution<S, A, C>
 where
     C: Default,
 {
     fn default() -> Self {
         Self {
+            states: Default::default(),
             actions: Default::default(),
             cost: Default::default(),
         }
@@ -25,15 +27,14 @@ where
 
 /// Defines a heuristic function that can be used by a search algorithm,
 /// for a given transition system and task.
-pub trait Heuristic<TS, S, A, C, DC, T>
+pub trait Heuristic<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, DC>,
     S: Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default,
-    T: Task<S>,
 {
     /// Creates the heuristic for a given task
-    fn new(transition_system: Arc<TS>, task: Arc<T>) -> Self
+    fn new(transition_system: Arc<TS>, task: Arc<Task<S>>) -> Self
     where
         Self: Sized;
 
