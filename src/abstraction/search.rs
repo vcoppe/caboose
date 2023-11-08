@@ -45,6 +45,7 @@ where
 /// Generic definition of a search node and the associated ordering functions
 /// that allow performing best-first searches by ordering nodes by increasing
 /// (cost + heuristic) values, with a tie-breaking favoring nodes with higher cost.
+#[derive(Debug, Clone)]
 pub struct SearchNode<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> {
     pub state: Arc<S>,
     pub cost: C,

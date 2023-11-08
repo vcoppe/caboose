@@ -1,7 +1,5 @@
 use std::{slice, sync::Arc};
 
-use crate::Time;
-
 /// Definition of a transition system that contains a set of states and actions,
 /// and transition functions that describe the result of any action applied to any state.
 /// The reverse transitions must also be described to allow using the reverse search as a heuristic.
@@ -37,10 +35,4 @@ pub trait Task<State: Eq> {
     fn is_goal_state(&self, state: &State) -> bool {
         *state == *self.goal_state()
     }
-}
-
-/// Trait for states that have a time dimension.
-pub trait Timed {
-    fn get_time(&self) -> Time;
-    fn set_time(&mut self, time: Time);
 }

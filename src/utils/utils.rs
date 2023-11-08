@@ -8,3 +8,12 @@ pub struct Interval {
     pub start: Time,
     pub end: Time,
 }
+
+impl Default for Interval {
+    fn default() -> Self {
+        Self {
+            start: Time::MIN_UTC.into(),
+            end: Time::MAX_UTC.into(),
+        }
+    }
+}

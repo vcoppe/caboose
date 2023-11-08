@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 
-use crate::{
-    Graph, GraphEdgeId, GraphNodeId, Heuristic, ReverseResumableAStar, Task, Time, Timed,
-    TransitionSystem,
-};
+use crate::{Graph, GraphEdgeId, GraphNodeId, Heuristic, Task, Time, TransitionSystem};
 
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
@@ -32,9 +29,7 @@ impl SimpleWorld {
     }
 }
 
-// Definitions that model a basic transition system that ignores the time dimension
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct SimpleState(pub GraphNodeId);
 
 impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
@@ -109,149 +104,5 @@ impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration, SimpleTask
             self.transition_system
                 .time_between(state.0, self.goal_state.0),
         )
-    }
-}
-
-// Definitions that model a basic transition system with a time dimension
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct SimpleTimedState {
-    pub node: GraphNodeId,
-    pub time: Time,
-}
-
-impl Timed for SimpleTimedState {
-    fn get_time(&self) -> Time {
-        self.time
-    }
-
-    fn set_time(&mut self, time: Time) {
-        self.time = time;
-    }
-}
-
-impl TransitionSystem<SimpleTimedState, GraphEdgeId, Duration> for SimpleWorld {
-    fn actions_from(&self, state: Arc<SimpleTimedState>) -> std::slice::Iter<GraphEdgeId> {
-        self.graph.get_edges_out(state.node).iter()
-    }
-
-    fn transition(&self, state: Arc<SimpleTimedState>, action: &GraphEdgeId) -> SimpleTimedState {
-        let edge = self.graph.get_edge(*action);
-        SimpleTimedState {
-            node: edge.to,
-            time: state.time + self.time(*action),
-        }
-    }
-
-    fn transition_cost(&self, _state: Arc<SimpleTimedState>, action: &GraphEdgeId) -> Duration {
-        Duration::milliseconds((self.graph.get_edge(*action).distance * 1000.0).round() as i64)
-    }
-
-    fn reverse_actions_from(&self, state: Arc<SimpleTimedState>) -> std::slice::Iter<GraphEdgeId> {
-        self.graph.get_edges_in(state.node).iter()
-    }
-
-    fn reverse_transition(
-        &self,
-        state: Arc<SimpleTimedState>,
-        action: &GraphEdgeId,
-    ) -> SimpleTimedState {
-        let edge = self.graph.get_edge(*action);
-        SimpleTimedState {
-            node: edge.from,
-            time: state.time + self.time(*action),
-        }
-    }
-
-    fn reverse_transition_cost(
-        &self,
-        _state: Arc<SimpleTimedState>,
-        action: &GraphEdgeId,
-    ) -> Duration {
-        Duration::milliseconds((self.graph.get_edge(*action).distance * 1000.0).round() as i64)
-    }
-}
-
-#[derive(Clone)]
-pub struct SimpleTimedTask {
-    initial_state: Arc<SimpleTimedState>,
-    goal_state: Arc<SimpleTimedState>,
-}
-
-impl Task<SimpleTimedState> for SimpleTimedTask {
-    fn new(initial_state: Arc<SimpleTimedState>, goal_state: Arc<SimpleTimedState>) -> Self {
-        SimpleTimedTask {
-            initial_state,
-            goal_state,
-        }
-    }
-
-    fn initial_state(&self) -> Arc<SimpleTimedState> {
-        self.initial_state.clone()
-    }
-
-    fn goal_state(&self) -> Arc<SimpleTimedState> {
-        self.goal_state.clone()
-    }
-
-    fn is_goal_state(&self, state: &SimpleTimedState) -> bool {
-        state.node == self.goal_state().node
-    }
-}
-
-pub struct SimpleTimedHeuristic {
-    transition_system: Arc<SimpleWorld>,
-    goal_state: Arc<SimpleTimedState>,
-}
-
-impl Heuristic<SimpleWorld, SimpleTimedState, GraphEdgeId, Time, Duration, SimpleTimedTask>
-    for SimpleTimedHeuristic
-{
-    fn new(transition_system: Arc<SimpleWorld>, task: Arc<SimpleTimedTask>) -> Self
-    where
-        Self: Sized,
-    {
-        SimpleTimedHeuristic {
-            transition_system,
-            goal_state: task.goal_state(),
-        }
-    }
-
-    fn get_heuristic(&mut self, state: Arc<SimpleTimedState>) -> Option<Duration> {
-        Some(
-            self.transition_system
-                .time_between(state.node, self.goal_state.node),
-        )
-    }
-}
-
-pub struct TimedHeuristic(
-    ReverseResumableAStar<
-        SimpleWorld,
-        SimpleState,
-        GraphEdgeId,
-        Time,
-        Duration,
-        SimpleTask,
-        SimpleHeuristic,
-    >,
-);
-
-impl Heuristic<SimpleWorld, SimpleTimedState, GraphEdgeId, Time, Duration, SimpleTimedTask>
-    for TimedHeuristic
-{
-    fn new(transition_system: Arc<SimpleWorld>, task: Arc<SimpleTimedTask>) -> Self
-    where
-        Self: Sized,
-    {
-        let task = Arc::new(SimpleTask {
-            initial_state: Arc::new(SimpleState(task.initial_state.node)),
-            goal_state: Arc::new(SimpleState(task.goal_state.node)),
-        });
-        TimedHeuristic(ReverseResumableAStar::new(transition_system, task))
-    }
-
-    fn get_heuristic(&mut self, state: Arc<SimpleTimedState>) -> Option<Duration> {
-        self.0.get_heuristic(Arc::new(SimpleState(state.node)))
     }
 }
