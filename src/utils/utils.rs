@@ -13,9 +13,15 @@ pub struct Interval {
 
 impl Default for Interval {
     fn default() -> Self {
-        Self {
-            start: Time::MIN_UTC.into(),
-            end: (Time::MAX_UTC - Duration::days(1)).into(),
-        }
+        Self::new(
+            Time::MIN_UTC.into(),
+            (Time::MAX_UTC - Duration::days(1)).into(),
+        )
+    }
+}
+
+impl Interval {
+    pub fn new(start: Time, end: Time) -> Self {
+        Self { start, end }
     }
 }

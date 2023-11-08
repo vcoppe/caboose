@@ -77,7 +77,7 @@ where
         });
 
         let goal_state = Arc::new(SippState {
-            safe_interval: Interval::default(),
+            safe_interval: config.interval,
             internal_state: goal_state,
         });
 
@@ -331,6 +331,7 @@ where
 {
     initial_time: Time,
     task: Arc<Task<S>>,
+    interval: Interval,
     heuristic: Arc<H>,
     _phantom: PhantomData<(TS, S, A)>,
 }
@@ -342,10 +343,16 @@ where
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    pub fn new(initial_time: Time, task: Arc<Task<S>>, heuristic: Arc<H>) -> Self {
+    pub fn new(
+        initial_time: Time,
+        task: Arc<Task<S>>,
+        interval: Interval,
+        heuristic: Arc<H>,
+    ) -> Self {
         SippConfig {
             initial_time,
             task,
+            interval,
             heuristic,
             _phantom: PhantomData::default(),
         }
@@ -490,6 +497,7 @@ mod tests {
                 let config = SippConfig::new(
                     initial_time,
                     task.clone(),
+                    Default::default(),
                     Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),

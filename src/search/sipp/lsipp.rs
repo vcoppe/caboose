@@ -54,6 +54,7 @@ where
             self.sipp.solve(&mut SippConfig::new(
                 config.initial_time,
                 config.task.clone(),
+                Default::default(),
                 self.get_heuristic(config, config.task.clone()),
             ))
         } else {
@@ -82,6 +83,7 @@ where
             &mut SippConfig::new(
                 config.initial_time,
                 task.clone(),
+                config.intervals[0],
                 self.get_heuristic(config, task),
             ),
             false,
@@ -100,7 +102,13 @@ where
 
     // Connect all landmarks sequentially
     fn between_landmarks(&mut self, config: &LSippConfig<TS, S, A, H>) {
-        for (i, landmark) in config.landmarks.iter().enumerate().skip(1) {
+        for (i, (landmark, interval)) in config
+            .landmarks
+            .iter()
+            .zip(config.intervals.iter())
+            .enumerate()
+            .skip(1)
+        {
             let task = Arc::new(Task::new(config.landmarks[i - 1].clone(), landmark.clone()));
             let config = GeneralizedSippConfig::new(
                 Arc::new(SippTask::new(
@@ -113,7 +121,7 @@ where
                         .map(|s| s.states.last().unwrap().clone())
                         .collect(),
                     Arc::new(SippState {
-                        safe_interval: Interval::default(),
+                        safe_interval: *interval,
                         internal_state: landmark.clone(),
                     }),
                     task.clone(),
