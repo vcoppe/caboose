@@ -31,7 +31,8 @@ where
 {
     transition_system: Arc<TS>,
     task: Arc<Task<S>>,
-    heuristic: H,
+    /// The heuristic must be an estimate of the distance to the start state
+    heuristic: Arc<H>,
     queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
     distance: RwLock<HashMap<Arc<S>, C>>,
     closed: RwLock<HashSet<Arc<S>>>,
@@ -47,28 +48,6 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    fn new(transition_system: Arc<TS>, task: Arc<Task<S>>) -> Self
-    where
-        Self: Sized,
-    {
-        let mut rra = ReverseResumableAStar {
-            transition_system: transition_system.clone(),
-            task: task.clone(),
-            heuristic: H::new(
-                transition_system,
-                // Reverse the task for the heuristic
-                Arc::new(Task::new(task.goal_state(), task.initial_state())),
-            ),
-            queue: Mutex::new(BinaryHeap::new()),
-            distance: RwLock::new(HashMap::new()),
-            closed: RwLock::new(HashSet::new()),
-            initial_cost: C::default(),
-            _phantom: PhantomData::default(),
-        };
-        rra.init();
-        rra
-    }
-
     fn get_heuristic(&self, state: Arc<S>) -> Option<DC> {
         self.find_path(state.clone())
     }
@@ -82,6 +61,24 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    pub fn new(transition_system: Arc<TS>, task: Arc<Task<S>>, heuristic: Arc<H>) -> Self
+    where
+        Self: Sized,
+    {
+        let mut rra = ReverseResumableAStar {
+            transition_system: transition_system.clone(),
+            task: task.clone(),
+            heuristic,
+            queue: Mutex::new(BinaryHeap::new()),
+            distance: RwLock::new(HashMap::new()),
+            closed: RwLock::new(HashSet::new()),
+            initial_cost: C::default(),
+            _phantom: PhantomData::default(),
+        };
+        rra.init();
+        rra
+    }
+
     /// Initializes the reverse search algorithm by enqueueing the goal state.
     fn init(&mut self) {
         let goal_node = SearchNode {
@@ -181,8 +178,8 @@ mod tests {
     use chrono::Duration;
 
     use crate::{
-        Graph, GraphEdgeId, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic,
-        SimpleState, SimpleWorld, Task, Time,
+        Graph, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic, SimpleState,
+        SimpleWorld, Task,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
@@ -221,14 +218,11 @@ mod tests {
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
         ));
-        let heuristic: ReverseResumableAStar<
-            SimpleWorld,
-            SimpleState,
-            GraphEdgeId,
-            Time,
-            Duration,
-            SimpleHeuristic,
-        > = ReverseResumableAStar::new(transition_system, task);
+        let heuristic = ReverseResumableAStar::new(
+            transition_system.clone(),
+            task.clone(),
+            Arc::new(SimpleHeuristic::new(transition_system, task)),
+        );
 
         for x in 0..size {
             for y in 0..size {

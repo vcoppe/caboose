@@ -63,17 +63,16 @@ pub struct SimpleHeuristic {
     goal_state: Arc<SimpleState>,
 }
 
-impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration> for SimpleHeuristic {
-    fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState>>) -> Self
-    where
-        Self: Sized,
-    {
+impl SimpleHeuristic {
+    pub fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState>>) -> Self {
         SimpleHeuristic {
             transition_system,
             goal_state: task.goal_state(),
         }
     }
+}
 
+impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration> for SimpleHeuristic {
     fn get_heuristic(&self, state: Arc<SimpleState>) -> Option<Duration> {
         Some(
             self.transition_system

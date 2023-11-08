@@ -1,15 +1,18 @@
-use std::{hash::Hash, ops::Add, sync::Arc};
+use std::{hash::Hash, marker::PhantomData, ops::Add, sync::Arc};
 
-use crate::{Task, TransitionSystem};
+use chrono::Duration;
+
+use crate::{Task, Time, TransitionSystem};
 
 /// Description of a solution to a search problem
+#[derive(Debug)]
 pub struct Solution<S, A, C>
 where
     C: Default,
 {
     pub states: Vec<S>,
+    pub costs: Vec<C>,
     pub actions: Vec<A>,
-    pub cost: C,
 }
 
 impl<S, A, C> Default for Solution<S, A, C>
@@ -19,8 +22,8 @@ where
     fn default() -> Self {
         Self {
             states: Default::default(),
+            costs: Default::default(),
             actions: Default::default(),
-            cost: Default::default(),
         }
     }
 }
@@ -33,14 +36,60 @@ where
     S: Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default,
 {
-    /// Creates the heuristic for a given task
-    fn new(transition_system: Arc<TS>, task: Arc<Task<S>>) -> Self
-    where
-        Self: Sized;
-
     /// Returns the heuristic value for the given state,
     /// or None if the goal state is not reachable from that state.
     fn get_heuristic(&self, state: Arc<S>) -> Option<DC>;
+}
+
+/// Differentiable heuristic built on top of heuristics dealing with
+/// time and durations.
+pub struct DifferentialHeuristic<TS, S, A, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Hash + Eq,
+    H: Heuristic<TS, S, A, Time, Duration>,
+{
+    task: Arc<Task<S>>,
+    pivot: Arc<S>,
+    heuristic_to_pivot: Arc<H>,
+    _phantom: PhantomData<(TS, S, A)>,
+}
+
+impl<TS, S, A, H> DifferentialHeuristic<TS, S, A, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Hash + Eq,
+    H: Heuristic<TS, S, A, Time, Duration>,
+{
+    pub fn new(task: Arc<Task<S>>, pivot: Arc<S>, heuristic_to_pivot: Arc<H>) -> Self {
+        DifferentialHeuristic {
+            task,
+            pivot,
+            heuristic_to_pivot,
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl<TS, S, A, H> Heuristic<TS, S, A, Time, Duration> for DifferentialHeuristic<TS, S, A, H>
+where
+    TS: TransitionSystem<S, A, Duration>,
+    S: Hash + Eq,
+    H: Heuristic<TS, S, A, Time, Duration>,
+{
+    fn get_heuristic(&self, state: Arc<S>) -> Option<Duration> {
+        if self.pivot == self.task.goal_state() {
+            self.heuristic_to_pivot.get_heuristic(state.clone())
+        } else if let (Some(h1), Some(h2)) = (
+            self.heuristic_to_pivot.get_heuristic(state.clone()),
+            self.heuristic_to_pivot
+                .get_heuristic(self.task.goal_state()),
+        ) {
+            Some((h2 - h1).abs())
+        } else {
+            None
+        }
+    }
 }
 
 /// Generic definition of a search node and the associated ordering functions

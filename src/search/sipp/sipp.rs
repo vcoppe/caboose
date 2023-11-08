@@ -55,7 +55,7 @@ where
     // safe intervals exist for the initial state.
     pub fn to_generalized(
         &self,
-        config: &mut SippConfig<TS, S, A, H>,
+        config: &SippConfig<TS, S, A, H>,
         single_path: bool,
     ) -> Option<GeneralizedSippConfig<TS, S, A, H>> {
         let initial_state = config.task.initial_state();
@@ -98,17 +98,17 @@ where
     /// Applies the algorithm to the given configuration.
     pub fn solve(
         &mut self,
-        config: &mut SippConfig<TS, S, A, H>,
+        config: &SippConfig<TS, S, A, H>,
     ) -> Option<Solution<Arc<SippState<S>>, A, Time>> {
         self.to_generalized(config, true)
-            .map(|mut config| self.solve_generalized(&mut config).pop())
+            .map(|config| self.solve_generalized(&config).pop())
             .flatten()
     }
 
     /// Applies the algorithm to the given configuration.
     pub fn solve_generalized(
         &mut self,
-        config: &mut GeneralizedSippConfig<TS, S, A, H>,
+        config: &GeneralizedSippConfig<TS, S, A, H>,
     ) -> Vec<Solution<Arc<SippState<S>>, A, Time>> {
         self.init(config);
         self.find_paths(config)
@@ -145,7 +145,7 @@ where
 
     fn find_paths(
         &mut self,
-        config: &mut GeneralizedSippConfig<TS, S, A, H>,
+        config: &GeneralizedSippConfig<TS, S, A, H>,
     ) -> Vec<SearchNode<SippState<S>, Time, Duration>> {
         let mut goals = vec![];
 
@@ -178,7 +178,7 @@ where
 
     fn get_successors(
         &mut self,
-        config: &mut GeneralizedSippConfig<TS, S, A, H>,
+        config: &GeneralizedSippConfig<TS, S, A, H>,
         current: &SearchNode<SippState<S>, Time, Duration>,
     ) -> Vec<SearchNode<SippState<S>, Time, Duration>> {
         let mut successors = vec![];
@@ -295,15 +295,17 @@ where
         let mut solution = Solution::default();
         let mut current = goal.state.clone();
 
-        solution.cost = goal.cost;
         solution.states.push(current.clone());
+        solution.costs.push(self.distance[&current]);
 
         while let Some((action, parent)) = self.parent.get(&current) {
             current = parent.clone();
-            solution.actions.push(*action);
             solution.states.push(current.clone());
+            solution.costs.push(self.distance[&current]);
+            solution.actions.push(*action);
         }
 
+        solution.costs.reverse();
         solution.actions.reverse();
         solution.states.reverse();
 
@@ -311,10 +313,7 @@ where
     }
 
     fn get_safe_intervals(&self, _state: &S) -> Vec<Interval> {
-        vec![Interval {
-            start: Time::MIN_UTC.into(),
-            end: Time::MAX_UTC.into(),
-        }]
+        vec![Interval::default()]
     }
 
     fn get_collision_intervals(&self, _action: A) -> Vec<Interval> {
@@ -441,8 +440,8 @@ mod tests {
     use chrono::Duration;
 
     use crate::{
-        search::sipp::sipp::SippConfig, Graph, GraphEdgeId, GraphNodeId, Heuristic,
-        ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, Task, Time,
+        search::sipp::sipp::SippConfig, Graph, GraphNodeId, ReverseResumableAStar, SimpleHeuristic,
+        SimpleState, SimpleWorld, Task, Time,
     };
 
     use super::SafeIntervalPathPlanning;
@@ -480,19 +479,7 @@ mod tests {
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
         let initial_time = Time::MIN_UTC.into();
-        let mut solver: SafeIntervalPathPlanning<
-            SimpleWorld,
-            SimpleState,
-            GraphEdgeId,
-            ReverseResumableAStar<
-                SimpleWorld,
-                SimpleState,
-                GraphEdgeId,
-                Time,
-                Duration,
-                SimpleHeuristic,
-            >,
-        > = SafeIntervalPathPlanning::new(transition_system.clone());
+        let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         for x in 0..size {
             for y in 0..size {
@@ -500,13 +487,17 @@ mod tests {
                     Arc::new(SimpleState(GraphNodeId(x + size * y))),
                     Arc::new(SimpleState(GraphNodeId(size * size - 1))),
                 ));
-                let mut config = SippConfig::new(
+                let config = SippConfig::new(
                     initial_time,
                     task.clone(),
-                    Arc::new(ReverseResumableAStar::new(transition_system.clone(), task)),
+                    Arc::new(ReverseResumableAStar::new(
+                        transition_system.clone(),
+                        task.clone(),
+                        Arc::new(SimpleHeuristic::new(transition_system.clone(), task)),
+                    )),
                 );
                 assert_eq!(
-                    solver.solve(&mut config).unwrap().cost,
+                    *solver.solve(&config).unwrap().costs.last().unwrap(),
                     initial_time
                         + Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
                 );

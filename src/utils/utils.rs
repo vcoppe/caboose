@@ -1,4 +1,6 @@
-use chrono::{DateTime, Local};
+use std::hash::Hash;
+
+use chrono::{DateTime, Duration, Local};
 
 pub type Time = DateTime<Local>;
 
@@ -13,7 +15,7 @@ impl Default for Interval {
     fn default() -> Self {
         Self {
             start: Time::MIN_UTC.into(),
-            end: Time::MAX_UTC.into(),
+            end: (Time::MAX_UTC - Duration::days(1)).into(),
         }
     }
 }
