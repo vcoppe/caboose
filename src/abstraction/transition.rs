@@ -20,6 +20,8 @@ pub trait TransitionSystem<State, Action, Cost> {
 
     fn reverse_transition(&self, state: Arc<State>, action: &Action) -> State;
     fn reverse_transition_cost(&self, state: Arc<State>, action: &Action) -> Cost;
+
+    fn can_wait_at(&self, state: Arc<State>) -> bool;
 }
 
 /// Definition of a callback that can be used to apply actions to a transition system.

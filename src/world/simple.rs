@@ -62,6 +62,10 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
     fn reverse_transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> Duration {
         Duration::milliseconds((self.graph.get_edge(*action).distance * 1000.0).round() as i64)
     }
+
+    fn can_wait_at(&self, _state: Arc<SimpleState>) -> bool {
+        true
+    }
 }
 
 pub struct SimpleHeuristic {

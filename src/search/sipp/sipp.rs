@@ -221,6 +221,13 @@ where
 
                 if successor_cost < safe_interval.start {
                     // Would arrive too early
+                    if !self
+                        .transition_system
+                        .can_wait_at(current.state.internal_state.clone())
+                    {
+                        // Cannot wait at the current state
+                        continue;
+                    }
                     successor_cost = safe_interval.start; // Try to depart later to arrive at the right time
                     if successor_cost - transition_cost > current.state.safe_interval.end {
                         // Cannot depart that late from the current safe interval
@@ -234,6 +241,13 @@ where
                 {
                     if successor_cost - transition_cost >= collision_interval.start {
                         // Collision detected
+                        if !self
+                            .transition_system
+                            .can_wait_at(current.state.internal_state.clone())
+                        {
+                            // Cannot wait at the current state
+                            continue;
+                        }
                         successor_cost = collision_interval.end + transition_cost; // Try to depart later
 
                         if successor_cost - transition_cost > current.state.safe_interval.end
