@@ -12,7 +12,7 @@ use crate::{
 /// (or positive constraints) to visit before aiming for the goal state.
 pub struct SafeIntervalPathPlanningWithLandmarks<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Debug + Copy + Hash + Eq,
     A: Debug + Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
@@ -24,7 +24,7 @@ where
 
 impl<TS, S, A, H> SafeIntervalPathPlanningWithLandmarks<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Debug + Copy + Hash + Eq,
     A: Debug + Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
@@ -53,7 +53,6 @@ where
         if config.landmarks.is_empty() {
             // No landmarks, just solve the task with SIPP
             self.sipp.solve(&mut SippConfig::new(
-                config.initial_time,
                 config.task.clone(),
                 Default::default(),
                 config.constraints.clone(),
@@ -71,12 +70,12 @@ where
     // Go from the initial state to the first landmark
     fn to_first_landmark(&mut self, config: &LSippConfig<TS, S, A, H>) {
         let task = Arc::new(Task::new(
-            config.task.initial_state(),
+            config.task.initial_state.clone(),
             config.landmarks[0].clone(),
+            config.task.initial_cost,
         ));
         let config = self.sipp.to_generalized(
             &mut SippConfig::new(
-                config.initial_time,
                 task.clone(),
                 config.intervals[0],
                 config.constraints.clone(),
@@ -105,7 +104,11 @@ where
             .enumerate()
             .skip(1)
         {
-            let task = Arc::new(Task::new(config.landmarks[i - 1].clone(), landmark.clone()));
+            let task = Arc::new(Task::new(
+                config.landmarks[i - 1].clone(),
+                landmark.clone(),
+                config.task.initial_cost,
+            ));
             let config = GeneralizedSippConfig::new(
                 Arc::new(SippTask::new(
                     self.solutions
@@ -137,7 +140,8 @@ where
     fn to_goal(&mut self, config: &LSippConfig<TS, S, A, H>) {
         let task = Arc::new(Task::new(
             config.landmarks.last().unwrap().clone(),
-            config.task.goal_state(),
+            config.task.goal_state.clone(),
+            config.task.initial_cost,
         ));
         let config = GeneralizedSippConfig::new(
             Arc::new(SippTask::new(
@@ -151,7 +155,7 @@ where
                     .collect(),
                 Arc::new(SippState {
                     safe_interval: Interval::default(),
-                    internal_state: config.task.goal_state(),
+                    internal_state: config.task.goal_state.clone(),
                 }),
                 task.clone(),
             )),
@@ -222,7 +226,7 @@ where
     fn get_heuristic(
         &self,
         config: &LSippConfig<TS, S, A, H>,
-        task: Arc<Task<S>>,
+        task: Arc<Task<S, Time>>,
     ) -> Arc<DifferentialHeuristic<TS, S, A, H>> {
         Arc::new(DifferentialHeuristic::new(
             task,
@@ -235,13 +239,12 @@ where
 /// Input configuration for the Safe Interval Path Planning algorithm with landmarks.
 pub struct LSippConfig<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    task: Arc<Task<S>>,
-    initial_time: Time,
+    task: Arc<Task<S, Time>>,
     landmarks: Vec<Arc<S>>,
     intervals: Vec<Interval>,
     constraints: Arc<ConstraintSet<S>>,
@@ -254,14 +257,13 @@ where
 
 impl<TS, S, A, H> LSippConfig<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     pub fn new(
-        task: Arc<Task<S>>,
-        initial_time: Time,
+        task: Arc<Task<S, Time>>,
         landmarks: Vec<Arc<S>>,
         intervals: Vec<Interval>,
         constraints: Arc<ConstraintSet<S>>,
@@ -269,19 +271,17 @@ where
     ) -> Self {
         Self {
             task: task.clone(),
-            initial_time,
             landmarks,
             intervals,
             constraints,
-            pivots: Arc::new(vec![task.goal_state().clone()]),
+            pivots: Arc::new(vec![task.goal_state.clone()]),
             heuristic_to_pivots: Arc::new(vec![heuristic]),
             _phantom: PhantomData::default(),
         }
     }
 
     pub fn new_with_pivots(
-        task: Arc<Task<S>>,
-        initial_time: Time,
+        task: Arc<Task<S, Time>>,
         landmarks: Vec<Arc<S>>,
         intervals: Vec<Interval>,
         constraints: Arc<ConstraintSet<S>>,
@@ -290,7 +290,6 @@ where
     ) -> Self {
         Self {
             task,
-            initial_time,
             landmarks,
             intervals,
             constraints,
@@ -305,12 +304,11 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chrono::Duration;
+    use chrono::{Duration, Local, TimeZone};
 
     use crate::{
         Graph, GraphNodeId, Interval, LSippConfig, ReverseResumableAStar,
         SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState, SimpleWorld, Task,
-        Time,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
@@ -345,7 +343,7 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = Time::MIN_UTC.into();
+        let initial_time = Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap();
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         for x in 0..size {
@@ -353,10 +351,10 @@ mod tests {
                 let task = Arc::new(Task::new(
                     Arc::new(SimpleState(GraphNodeId(x + size * y))),
                     Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+                    initial_time,
                 ));
                 let mut config = LSippConfig::new(
                     task.clone(),
-                    initial_time,
                     vec![],
                     vec![],
                     Default::default(),
@@ -379,16 +377,16 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = Time::MIN_UTC.into();
+        let initial_time = Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap();
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+            initial_time,
         ));
         let mut config = LSippConfig::new(
             task.clone(),
-            initial_time,
             vec![
                 Arc::new(SimpleState(GraphNodeId(size - 1))),
                 Arc::new(SimpleState(GraphNodeId(size * (size - 1)))),

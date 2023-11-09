@@ -23,26 +23,25 @@ use crate::{SearchNode, State};
 /// time-independent shortest paths between states.
 pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, DC>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
-    task: Arc<Task<S>>,
+    task: Arc<Task<S, C>>,
     /// The heuristic must be an estimate of the distance to the start state
     heuristic: Arc<H>,
     queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
     distance: RwLock<HashMap<Arc<S>, C>>,
     closed: RwLock<HashSet<Arc<S>>>,
-    initial_cost: C,
     _phantom: PhantomData<A>,
 }
 
 impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for ReverseResumableAStar<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, DC>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
@@ -55,13 +54,13 @@ where
 
 impl<TS, S, A, C, DC, H> ReverseResumableAStar<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, DC>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    pub fn new(transition_system: Arc<TS>, task: Arc<Task<S>>, heuristic: Arc<H>) -> Self
+    pub fn new(transition_system: Arc<TS>, task: Arc<Task<S, C>>, heuristic: Arc<H>) -> Self
     where
         Self: Sized,
     {
@@ -72,7 +71,6 @@ where
             queue: Mutex::new(BinaryHeap::new()),
             distance: RwLock::new(HashMap::new()),
             closed: RwLock::new(HashSet::new()),
-            initial_cost: C::default(),
             _phantom: PhantomData::default(),
         };
         rra.init();
@@ -82,8 +80,8 @@ where
     /// Initializes the reverse search algorithm by enqueueing the goal state.
     fn init(&mut self) {
         let goal_node = SearchNode {
-            state: self.task.goal_state(),
-            cost: C::default(),
+            state: self.task.goal_state.clone(),
+            cost: self.task.initial_cost,
             heuristic: C::default() - C::default(),
         };
 
@@ -99,13 +97,13 @@ where
     fn find_path(&self, state: Arc<S>) -> Option<DC> {
         if self.closed.read().unwrap().contains(&state) {
             // The distance has already been computed
-            return Some(self.distance.read().unwrap()[&state] - self.initial_cost);
+            return Some(self.distance.read().unwrap()[&state] - self.task.initial_cost);
         }
 
         let mut queue = self.queue.lock().unwrap(); // Lock the queue to avoid concurrent executions of the algorithm
         if self.closed.read().unwrap().contains(&state) {
             // Check if the distance has been computed while waiting for the lock
-            return Some(self.distance.read().unwrap()[&state] - self.initial_cost);
+            return Some(self.distance.read().unwrap()[&state] - self.task.initial_cost);
         }
 
         while let Some(Reverse(current)) = queue.pop() {
@@ -116,7 +114,7 @@ where
 
             if current.state == state {
                 // The optimal distance has been found
-                return Some(current.cost - self.initial_cost);
+                return Some(current.cost - self.task.initial_cost);
             }
 
             // Expand the current state and enqueue its successors if a better path has been found
@@ -175,7 +173,7 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chrono::Duration;
+    use chrono::{Duration, Local, TimeZone};
 
     use crate::{
         Graph, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic, SimpleState,
@@ -217,6 +215,7 @@ mod tests {
         let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+            Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap(),
         ));
         let heuristic = ReverseResumableAStar::new(
             transition_system.clone(),

@@ -10,18 +10,20 @@ pub trait State {
 /// Definition of a transition system that contains a set of states and actions,
 /// and transition functions that describe the result of any action applied to any state.
 /// The reverse transitions must also be described to allow using the reverse search as a heuristic.
-pub trait TransitionSystem<State, Action, Cost> {
-    fn actions_from(&self, state: Arc<State>) -> slice::Iter<Action>;
+pub trait TransitionSystem<S, A, C, DC> {
+    fn actions_from(&self, state: Arc<S>) -> slice::Iter<A>;
 
-    fn transition(&self, state: Arc<State>, action: &Action) -> State;
-    fn transition_cost(&self, state: Arc<State>, action: &Action) -> Cost;
+    fn transition(&self, state: Arc<S>, action: &A) -> S;
+    fn transition_cost(&self, state: Arc<S>, action: &A) -> DC;
 
-    fn reverse_actions_from(&self, state: Arc<State>) -> slice::Iter<Action>;
+    fn reverse_actions_from(&self, state: Arc<S>) -> slice::Iter<A>;
 
-    fn reverse_transition(&self, state: Arc<State>, action: &Action) -> State;
-    fn reverse_transition_cost(&self, state: Arc<State>, action: &Action) -> Cost;
+    fn reverse_transition(&self, state: Arc<S>, action: &A) -> S;
+    fn reverse_transition_cost(&self, state: Arc<S>, action: &A) -> DC;
 
-    fn can_wait_at(&self, state: Arc<State>) -> bool;
+    fn can_wait_at(&self, state: Arc<S>) -> bool;
+
+    fn conflict(&self, moves: (&Move<S, A, C, DC>, &Move<S, A, C, DC>)) -> bool;
 }
 
 /// Definition of a callback that can be used to apply actions to a transition system.
@@ -37,28 +39,38 @@ impl<Action, X: FnMut(Action)> ActionCallback<Action> for X {
 
 /// Definition of a task in a given transition system that can then
 /// be fed to a search algorithm.
-pub struct Task<S: State + Eq> {
-    initial_state: Arc<S>,
-    goal_state: Arc<S>,
+pub struct Task<S, C>
+where
+    S: State + Eq,
+{
+    pub initial_state: Arc<S>,
+    pub goal_state: Arc<S>,
+    pub initial_cost: C,
 }
 
-impl<S: State + Eq> Task<S> {
-    pub fn new(initial_state: Arc<S>, goal_state: Arc<S>) -> Self {
+impl<S, C> Task<S, C>
+where
+    S: State + Eq,
+{
+    pub fn new(initial_state: Arc<S>, goal_state: Arc<S>, initial_cost: C) -> Self {
         Self {
             initial_state,
             goal_state,
+            initial_cost,
         }
-    }
-
-    pub fn initial_state(&self) -> Arc<S> {
-        self.initial_state.clone()
-    }
-
-    pub fn goal_state(&self) -> Arc<S> {
-        self.goal_state.clone()
     }
 
     pub fn is_goal_state(&self, state: &S) -> bool {
         state.is_equivalent(&self.goal_state)
     }
+}
+
+/// Definition of a move in a transition system.
+pub struct Move<S, A, C, DC> {
+    pub agent: usize,
+    pub from: Arc<S>,
+    pub to: Arc<S>,
+    pub action: A,
+    pub time: C,
+    pub duration: DC,
 }

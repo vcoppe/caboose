@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use chrono::Duration;
 
-use crate::{Graph, GraphEdgeId, GraphNodeId, Heuristic, State, Task, Time, TransitionSystem};
+use crate::{
+    Graph, GraphEdgeId, GraphNodeId, Heuristic, Move, State, Task, Time, TransitionSystem,
+};
 
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
@@ -38,7 +40,7 @@ impl State for SimpleState {
     }
 }
 
-impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
+impl TransitionSystem<SimpleState, GraphEdgeId, Time, Duration> for SimpleWorld {
     fn actions_from(&self, state: Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
         self.graph.get_edges_out(state.0).iter()
     }
@@ -66,6 +68,16 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
     fn can_wait_at(&self, _state: Arc<SimpleState>) -> bool {
         true
     }
+
+    fn conflict(
+        &self,
+        _moves: (
+            &Move<SimpleState, GraphEdgeId, Time, Duration>,
+            &Move<SimpleState, GraphEdgeId, Time, Duration>,
+        ),
+    ) -> bool {
+        todo!("Implement conflict detection for SimpleWorld")
+    }
 }
 
 pub struct SimpleHeuristic {
@@ -74,10 +86,10 @@ pub struct SimpleHeuristic {
 }
 
 impl SimpleHeuristic {
-    pub fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState>>) -> Self {
+    pub fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState, Time>>) -> Self {
         SimpleHeuristic {
             transition_system,
-            goal_state: task.goal_state(),
+            goal_state: task.goal_state.clone(),
         }
     }
 }

@@ -9,10 +9,10 @@ use std::{
 
 use chrono::Duration;
 
-use crate::{Interval, State, Task, Time, TransitionSystem};
+use crate::{Interval, Move, State, Task, Time, TransitionSystem};
 
 /// Description of a solution to a search problem
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Solution<S, A, C>
 where
     C: Default,
@@ -39,7 +39,7 @@ where
 /// for a given transition system and task.
 pub trait Heuristic<TS, S, A, C, DC>
 where
-    TS: TransitionSystem<S, A, DC>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: Hash + Eq,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default,
 {
@@ -52,11 +52,11 @@ where
 /// time and durations.
 pub struct DifferentialHeuristic<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    task: Arc<Task<S>>,
+    task: Arc<Task<S, Time>>,
     pivots: Arc<Vec<Arc<S>>>,
     heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     _phantom: PhantomData<(TS, S, A)>,
@@ -64,12 +64,12 @@ where
 
 impl<TS, S, A, H> DifferentialHeuristic<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     pub fn new(
-        task: Arc<Task<S>>,
+        task: Arc<Task<S, Time>>,
         pivots: Arc<Vec<Arc<S>>>,
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     ) -> Self {
@@ -84,20 +84,20 @@ where
 
 impl<TS, S, A, H> Heuristic<TS, S, A, Time, Duration> for DifferentialHeuristic<TS, S, A, H>
 where
-    TS: TransitionSystem<S, A, Duration>,
+    TS: TransitionSystem<S, A, Time, Duration>,
     S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     fn get_heuristic(&self, state: Arc<S>) -> Option<Duration> {
         let mut heuristic = Duration::zero();
         for (pivot, heuristic_to_pivot) in self.pivots.iter().zip(self.heuristic_to_pivots.iter()) {
-            if pivot.is_equivalent(self.task.goal_state().as_ref()) {
+            if pivot.is_equivalent(self.task.goal_state.as_ref()) {
                 if let Some(h) = heuristic_to_pivot.get_heuristic(state.clone()) {
                     heuristic = heuristic.max(h);
                 }
             } else if let (Some(h1), Some(h2)) = (
                 heuristic_to_pivot.get_heuristic(state.clone()),
-                heuristic_to_pivot.get_heuristic(self.task.goal_state()),
+                heuristic_to_pivot.get_heuristic(self.task.goal_state.clone()),
             ) {
                 heuristic = heuristic.max((h2 - h1).abs());
             }
@@ -110,24 +110,37 @@ where
 /// that allow performing best-first searches by ordering nodes by increasing
 /// (cost + heuristic) values, with a tie-breaking favoring nodes with higher cost.
 #[derive(Debug, Clone)]
-pub struct SearchNode<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> {
+pub struct SearchNode<S, C, DC>
+where
+    C: Copy + Eq + Ord + Add<DC, Output = C>,
+    DC: Copy,
+{
     pub state: Arc<S>,
     pub cost: C,
     pub heuristic: DC,
 }
 
-impl<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> PartialEq
-    for SearchNode<S, C, DC>
+impl<S, C, DC> PartialEq for SearchNode<S, C, DC>
+where
+    C: Copy + Eq + Ord + Add<DC, Output = C>,
+    DC: Copy,
 {
     fn eq(&self, other: &Self) -> bool {
         self.cost + self.heuristic == other.cost + other.heuristic
     }
 }
 
-impl<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> Eq for SearchNode<S, C, DC> {}
+impl<S, C, DC> Eq for SearchNode<S, C, DC>
+where
+    C: Copy + Eq + Ord + Add<DC, Output = C>,
+    DC: Copy,
+{
+}
 
-impl<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> PartialOrd
-    for SearchNode<S, C, DC>
+impl<S, C, DC> PartialOrd for SearchNode<S, C, DC>
+where
+    C: Copy + Eq + Ord + Add<DC, Output = C>,
+    DC: Copy,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.cost + self.heuristic == other.cost + other.heuristic {
@@ -138,12 +151,96 @@ impl<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> PartialOrd
     }
 }
 
-impl<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> Ord for SearchNode<S, C, DC> {
+impl<S, C, DC> Ord for SearchNode<S, C, DC>
+where
+    C: Copy + Eq + Ord + Add<DC, Output = C>,
+    DC: Copy,
+{
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         if self.cost + self.heuristic == other.cost + other.heuristic {
             return other.cost.cmp(&self.cost); // Estimation is more precise when the cost is larger
         } else {
             (self.cost + self.heuristic).cmp(&(other.cost + other.heuristic))
+        }
+    }
+}
+
+/// Definition of the different conflict types.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum ConflictType {
+    /// Solving this conflicts delays both agents
+    Cardinal,
+    /// Solving this conflicts delays one agent
+    SemiCardinal,
+    /// The conflict can be solved without delaying any agent
+    NonCardinal,
+}
+
+/// Definition of a conflict between two moves.
+pub struct Conflict<S, A, C, DC>
+where
+    C: Ord,
+{
+    pub moves: (Arc<Move<S, A, C, DC>>, Arc<Move<S, A, C, DC>>),
+    pub type_: ConflictType,
+}
+
+// TODO: also take into account the overcost of solving the conflict
+impl<S, A, C, DC> Conflict<S, A, C, DC>
+where
+    C: Ord,
+{
+    pub fn new(
+        moves: (Arc<Move<S, A, C, DC>>, Arc<Move<S, A, C, DC>>),
+        type_: ConflictType,
+    ) -> Self {
+        Self { moves, type_ }
+    }
+}
+
+impl<S, A, C, DC> PartialEq for Conflict<S, A, C, DC>
+where
+    C: Ord + Copy,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.type_ == other.type_
+            && self.moves.0.time.min(self.moves.1.time)
+                == other.moves.0.time.min(other.moves.1.time)
+    }
+}
+
+impl<S, A, C, DC> Eq for Conflict<S, A, C, DC> where C: Ord + Copy {}
+
+impl<S, A, C, DC> PartialOrd for Conflict<S, A, C, DC>
+where
+    C: Ord + Copy,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.type_ == other.type_ {
+            self.moves
+                .0
+                .time
+                .min(self.moves.1.time)
+                .partial_cmp(&other.moves.0.time.min(other.moves.1.time))
+        } else {
+            self.type_.partial_cmp(&other.type_)
+        }
+    }
+}
+
+impl<S, A, C, DC> Ord for Conflict<S, A, C, DC>
+where
+    C: Ord + Copy,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.type_ == other.type_ {
+            self.moves
+                .0
+                .time
+                .min(self.moves.1.time)
+                .cmp(&other.moves.0.time.min(other.moves.1.time))
+        } else {
+            self.type_.cmp(&other.type_)
         }
     }
 }
