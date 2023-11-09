@@ -42,6 +42,7 @@ where
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
+    /// Creates a new instance of the Safe Interval Path Planning algorithm.
     pub fn new(transition_system: Arc<TS>) -> Self {
         SafeIntervalPathPlanning {
             transition_system,
@@ -98,7 +99,7 @@ where
         ))
     }
 
-    /// Applies the algorithm to the given configuration.
+    /// Attempts to solve the given configuration, and returns the optimal solution if any.
     pub fn solve(
         &mut self,
         config: &SippConfig<TS, S, A, H>,
@@ -107,8 +108,7 @@ where
             .map(|config| self.solve_generalized(&config).pop())
             .flatten()
     }
-
-    /// Applies the algorithm to the given configuration.
+    /// Attempts to solve the given generalized configuration, and returns the optimal solution if any.
     pub fn solve_generalized(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, H>,
@@ -146,6 +146,8 @@ where
         }
     }
 
+    /// Finds all shortest paths from the initial states to any reachable safe interval
+    /// at the goal state.
     fn find_paths(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, H>,
@@ -168,8 +170,6 @@ where
 
             // Expand the current state and enqueue its successors
             for successor in self.get_successors(config, &current) {
-                self.distance
-                    .insert(successor.state.clone(), successor.cost);
                 self.queue.push(Reverse(successor));
             }
 
@@ -179,6 +179,7 @@ where
         goals
     }
 
+    /// Generates the reachable successors of the given search node.
     fn get_successors(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, H>,
@@ -313,6 +314,7 @@ where
         successors
     }
 
+    /// Reconstructs the solution from the given goal search node.
     fn get_solution(
         &self,
         goal: &SearchNode<SippState<S>, Time, Duration>,
@@ -337,6 +339,7 @@ where
         solution
     }
 
+    /// Returns the safe intervals for the given state, given a set of constraints.
     fn get_safe_intervals(constraints: Arc<ConstraintSet<S>>, state: &Arc<S>) -> Vec<Interval> {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
             let mut safe_intervals = vec![];

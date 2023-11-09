@@ -17,7 +17,6 @@ where
     A: Debug + Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    transition_system: Arc<TS>,
     sipp: SafeIntervalPathPlanning<TS, S, A, DifferentialHeuristic<TS, S, A, H>>,
     solutions: Vec<Solution<Arc<SippState<S>>, A, Time>>,
     parent: HashMap<(Arc<SippState<S>>, Time), (A, Arc<SippState<S>>, Time)>,
@@ -30,9 +29,9 @@ where
     A: Debug + Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    fn new(transition_system: Arc<TS>) -> Self {
+    /// Creates a new instance of the Safe Interval Path Planning algorithm with landmarks.
+    pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
-            transition_system: transition_system.clone(),
             sipp: SafeIntervalPathPlanning::new(transition_system),
             parent: HashMap::new(),
             solutions: vec![],
@@ -44,7 +43,8 @@ where
         self.parent.clear();
     }
 
-    fn solve(
+    /// Attempts to solve the given configuration, and returns the solution if any.
+    pub fn solve(
         &mut self,
         config: &LSippConfig<TS, S, A, H>,
     ) -> Option<Solution<Arc<SippState<S>>, A, Time>> {
@@ -61,18 +61,11 @@ where
             ))
         } else {
             // Solve the task with landmarks
-            self.solve_with_landmarks(config)
+            self.to_first_landmark(&config);
+            self.between_landmarks(&config);
+            self.to_goal(&config);
+            self.get_solution()
         }
-    }
-
-    fn solve_with_landmarks(
-        &mut self,
-        config: &LSippConfig<TS, S, A, H>,
-    ) -> Option<Solution<Arc<SippState<S>>, A, Time>> {
-        self.to_first_landmark(&config);
-        self.between_landmarks(&config);
-        self.to_goal(&config);
-        self.get_solution()
     }
 
     // Go from the initial state to the first landmark
@@ -233,8 +226,8 @@ where
     ) -> Arc<DifferentialHeuristic<TS, S, A, H>> {
         Arc::new(DifferentialHeuristic::new(
             task,
-            config.task.goal_state(),
-            config.heuristic.clone(),
+            config.pivots.clone(),
+            config.heuristic_to_pivots.clone(),
         ))
     }
 }
@@ -252,7 +245,10 @@ where
     landmarks: Vec<Arc<S>>,
     intervals: Vec<Interval>,
     constraints: Arc<ConstraintSet<S>>,
-    heuristic: Arc<H>,
+    /// A set of pivot states.
+    pivots: Arc<Vec<Arc<S>>>,
+    /// A set of heuristics to those pivot states.
+    heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     _phantom: PhantomData<(TS, A)>,
 }
 
@@ -272,12 +268,34 @@ where
         heuristic: Arc<H>,
     ) -> Self {
         Self {
+            task: task.clone(),
+            initial_time,
+            landmarks,
+            intervals,
+            constraints,
+            pivots: Arc::new(vec![task.goal_state().clone()]),
+            heuristic_to_pivots: Arc::new(vec![heuristic]),
+            _phantom: PhantomData::default(),
+        }
+    }
+
+    pub fn new_with_pivots(
+        task: Arc<Task<S>>,
+        initial_time: Time,
+        landmarks: Vec<Arc<S>>,
+        intervals: Vec<Interval>,
+        constraints: Arc<ConstraintSet<S>>,
+        pivots: Arc<Vec<Arc<S>>>,
+        heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    ) -> Self {
+        Self {
             task,
             initial_time,
             landmarks,
             intervals,
             constraints,
-            heuristic,
+            pivots,
+            heuristic_to_pivots,
             _phantom: PhantomData::default(),
         }
     }

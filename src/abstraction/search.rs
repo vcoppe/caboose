@@ -57,8 +57,8 @@ where
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     task: Arc<Task<S>>,
-    pivot: Arc<S>,
-    heuristic_to_pivot: Arc<H>,
+    pivots: Arc<Vec<Arc<S>>>,
+    heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     _phantom: PhantomData<(TS, S, A)>,
 }
 
@@ -68,11 +68,15 @@ where
     S: State + Hash + Eq,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    pub fn new(task: Arc<Task<S>>, pivot: Arc<S>, heuristic_to_pivot: Arc<H>) -> Self {
+    pub fn new(
+        task: Arc<Task<S>>,
+        pivots: Arc<Vec<Arc<S>>>,
+        heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    ) -> Self {
         DifferentialHeuristic {
             task,
-            pivot,
-            heuristic_to_pivot,
+            pivots,
+            heuristic_to_pivots,
             _phantom: PhantomData::default(),
         }
     }
@@ -85,17 +89,20 @@ where
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     fn get_heuristic(&self, state: Arc<S>) -> Option<Duration> {
-        if self.pivot == self.task.goal_state() {
-            self.heuristic_to_pivot.get_heuristic(state.clone())
-        } else if let (Some(h1), Some(h2)) = (
-            self.heuristic_to_pivot.get_heuristic(state.clone()),
-            self.heuristic_to_pivot
-                .get_heuristic(self.task.goal_state()),
-        ) {
-            Some((h2 - h1).abs())
-        } else {
-            None
+        let mut heuristic = Duration::zero();
+        for (pivot, heuristic_to_pivot) in self.pivots.iter().zip(self.heuristic_to_pivots.iter()) {
+            if pivot.is_equivalent(self.task.goal_state().as_ref()) {
+                if let Some(h) = heuristic_to_pivot.get_heuristic(state.clone()) {
+                    heuristic = heuristic.max(h);
+                }
+            } else if let (Some(h1), Some(h2)) = (
+                heuristic_to_pivot.get_heuristic(state.clone()),
+                heuristic_to_pivot.get_heuristic(self.task.goal_state()),
+            ) {
+                heuristic = heuristic.max((h2 - h1).abs());
+            }
         }
+        Some(heuristic)
     }
 }
 
