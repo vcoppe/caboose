@@ -13,7 +13,9 @@ use std::{
 
 use chrono::Duration;
 
-use crate::{Heuristic, Interval, SearchNode, Solution, State, Task, Time, TransitionSystem};
+use crate::{
+    ConstraintSet, Heuristic, Interval, SearchNode, Solution, State, Task, Time, TransitionSystem,
+};
 
 /// Implementation of the Safe Interval Path Planning algorithm that computes
 /// the optimal sequence of actions to complete a given task in a given transition system,
@@ -62,7 +64,7 @@ where
         let initial_time = config.initial_time;
         let goal_state = config.task.goal_state();
 
-        let safe_intervals = self.get_safe_intervals(&initial_state);
+        let safe_intervals = Self::get_safe_intervals(config.constraints.clone(), &initial_state);
         let safe_interval = safe_intervals
             .iter()
             .find(|interval| interval.start <= initial_time && interval.end >= initial_time);
@@ -90,6 +92,7 @@ where
 
         Some(GeneralizedSippConfig::new(
             sipp_task,
+            config.constraints.clone(),
             config.heuristic.clone(),
             single_path,
         ))
@@ -207,11 +210,15 @@ where
                 continue;
             }
 
-            let collision_intervals = self.get_collision_intervals(*action);
+            let action_constraints = config
+                .constraints
+                .get_action_constraints(&current.state.internal_state, &successor_state);
 
             // Try to reach any of the safe intervals of the destination state
             // and add the corresponding successors to the queue if a better path has been found
-            for safe_interval in self.get_safe_intervals(successor_state.as_ref()).iter() {
+            for safe_interval in
+                Self::get_safe_intervals(config.constraints.clone(), &successor_state).iter()
+            {
                 let mut successor_cost = current.cost + transition_cost;
 
                 if successor_cost > safe_interval.end {
@@ -235,9 +242,13 @@ where
                     }
                 }
 
-                if let Some(collision_interval) = collision_intervals
-                    .iter()
-                    .find(|interval| interval.end >= successor_cost - transition_cost)
+                if let Some(collision_interval) = action_constraints
+                    .map(|col| {
+                        col.iter()
+                            .find(|c| c.interval.end >= successor_cost - transition_cost)
+                            .map(|c| c.interval)
+                    })
+                    .flatten()
                 {
                     if successor_cost - transition_cost >= collision_interval.start {
                         // Collision detected
@@ -326,12 +337,27 @@ where
         solution
     }
 
-    fn get_safe_intervals(&self, _state: &S) -> Vec<Interval> {
-        vec![Interval::default()]
-    }
+    fn get_safe_intervals(constraints: Arc<ConstraintSet<S>>, state: &Arc<S>) -> Vec<Interval> {
+        if let Some(state_constraints) = constraints.get_state_constraints(state) {
+            let mut safe_intervals = vec![];
 
-    fn get_collision_intervals(&self, _action: A) -> Vec<Interval> {
-        vec![]
+            let mut current = Interval::default();
+            for constraint in state_constraints.iter() {
+                current.end = constraint.interval.start;
+                if current.start < current.end {
+                    safe_intervals.push(current);
+                }
+                current.start = constraint.interval.end;
+            }
+            current.end = Interval::default().end;
+            if current.start < current.end {
+                safe_intervals.push(current);
+            }
+
+            safe_intervals
+        } else {
+            vec![Interval::default()]
+        }
     }
 }
 
@@ -346,6 +372,7 @@ where
     initial_time: Time,
     task: Arc<Task<S>>,
     interval: Interval,
+    constraints: Arc<ConstraintSet<S>>,
     heuristic: Arc<H>,
     _phantom: PhantomData<(TS, S, A)>,
 }
@@ -361,12 +388,14 @@ where
         initial_time: Time,
         task: Arc<Task<S>>,
         interval: Interval,
+        constraints: Arc<ConstraintSet<S>>,
         heuristic: Arc<H>,
     ) -> Self {
         SippConfig {
             initial_time,
             task,
             interval,
+            constraints,
             heuristic,
             _phantom: PhantomData::default(),
         }
@@ -382,6 +411,7 @@ where
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     task: Arc<SippTask<S>>,
+    constraints: Arc<ConstraintSet<S>>,
     heuristic: Arc<H>,
     single_path: bool,
     _phantom: PhantomData<(TS, S, A)>,
@@ -394,9 +424,15 @@ where
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
-    pub fn new(task: Arc<SippTask<S>>, heuristic: Arc<H>, single_path: bool) -> Self {
+    pub fn new(
+        task: Arc<SippTask<S>>,
+        constraints: Arc<ConstraintSet<S>>,
+        heuristic: Arc<H>,
+        single_path: bool,
+    ) -> Self {
         GeneralizedSippConfig {
             task,
+            constraints,
             heuristic,
             single_path,
             _phantom: PhantomData::default(),
@@ -458,11 +494,12 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chrono::Duration;
+    use chrono::{Duration, Local, TimeZone};
 
     use crate::{
-        search::sipp::sipp::SippConfig, Graph, GraphNodeId, ReverseResumableAStar, SimpleHeuristic,
-        SimpleState, SimpleWorld, Task, Time,
+        search::sipp::sipp::SippConfig, ConstraintSet, Graph, GraphEdgeId, GraphNodeId, Interval,
+        ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, StateConstraint, Task,
+        Time,
     };
 
     use super::SafeIntervalPathPlanning;
@@ -512,6 +549,7 @@ mod tests {
                     initial_time,
                     task.clone(),
                     Default::default(),
+                    Default::default(),
                     Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),
@@ -520,10 +558,103 @@ mod tests {
                 );
                 assert_eq!(
                     *solver.solve(&config).unwrap().costs.last().unwrap(),
-                    initial_time
-                        + Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
+                    initial_time + Duration::seconds(((size - x - 1) + (size - y - 1)) as i64)
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_safe_intervals() {
+        let state = Arc::new(SimpleState(GraphNodeId(0)));
+
+        let dates = vec![
+            Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap(),
+            Local.with_ymd_and_hms(2000, 01, 01, 11, 0, 0).unwrap(),
+            Local.with_ymd_and_hms(2000, 01, 01, 12, 0, 0).unwrap(),
+            Local.with_ymd_and_hms(2000, 01, 01, 13, 0, 0).unwrap(),
+        ];
+
+        let mut constraints = ConstraintSet::default();
+        constraints.add_state_constraint(StateConstraint::new(
+            state.clone(),
+            Interval::new(dates[0], dates[1]),
+        ));
+        constraints.add_state_constraint(StateConstraint::new(
+            state.clone(),
+            Interval::new(dates[2], dates[3]),
+        ));
+
+        let safe_intervals = SafeIntervalPathPlanning::<
+            SimpleWorld,
+            SimpleState,
+            GraphEdgeId,
+            SimpleHeuristic,
+        >::get_safe_intervals(Arc::new(constraints), &state);
+
+        assert_eq!(safe_intervals.len(), 3);
+        assert_eq!(safe_intervals[0].end, dates[0]);
+        assert_eq!(safe_intervals[1].start, dates[1]);
+        assert_eq!(safe_intervals[1].end, dates[2]);
+        assert_eq!(safe_intervals[2].start, dates[3]);
+    }
+
+    #[test]
+    fn test_with_constraints() {
+        let size = 10;
+        let graph = simple_graph(size);
+        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let initial_time = Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap();
+        let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
+
+        let task = Arc::new(Task::new(
+            Arc::new(SimpleState(GraphNodeId(0))),
+            Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+        ));
+
+        let dates = vec![
+            initial_time + Duration::seconds(2),
+            initial_time + Duration::seconds(8),
+            initial_time + Duration::seconds(12),
+            initial_time + Duration::seconds(18),
+        ];
+
+        let mut constraints = ConstraintSet::default();
+        for k in 0..size {
+            for l in vec![3, 6] {
+                for state in vec![
+                    Arc::new(SimpleState(GraphNodeId(l + size * k))),
+                    Arc::new(SimpleState(GraphNodeId(k + size * l))),
+                ] {
+                    constraints.add_state_constraint(StateConstraint::new(
+                        state.clone(),
+                        Interval::new(dates[0], dates[1]),
+                    ));
+                    constraints.add_state_constraint(StateConstraint::new(
+                        state.clone(),
+                        Interval::new(dates[2], dates[3]),
+                    ));
+                }
+            }
+        }
+
+        let config = SippConfig::new(
+            initial_time,
+            task.clone(),
+            Default::default(),
+            Arc::new(constraints),
+            Arc::new(ReverseResumableAStar::new(
+                transition_system.clone(),
+                task.clone(),
+                Arc::new(SimpleHeuristic::new(transition_system.clone(), task)),
+            )),
+        );
+
+        let solution = solver.solve(&config).unwrap();
+
+        assert_eq!(
+            *solution.costs.last().unwrap(),
+            initial_time + Duration::seconds(24)
+        );
     }
 }

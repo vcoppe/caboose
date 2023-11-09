@@ -230,7 +230,7 @@ mod tests {
                     heuristic
                         .get_heuristic(Arc::new(SimpleState(GraphNodeId(x + y * size))))
                         .unwrap(),
-                    Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
+                    Duration::seconds(((size - x - 1) + (size - y - 1)) as i64)
                 );
             }
         }

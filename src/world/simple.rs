@@ -48,7 +48,7 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
     }
 
     fn transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> Duration {
-        Duration::milliseconds((self.graph.get_edge(*action).distance * 1000.0).round() as i64)
+        self.time(*action)
     }
 
     fn reverse_actions_from(&self, state: Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
@@ -60,7 +60,7 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Duration> for SimpleWorld {
     }
 
     fn reverse_transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> Duration {
-        Duration::milliseconds((self.graph.get_edge(*action).distance * 1000.0).round() as i64)
+        self.time(*action)
     }
 
     fn can_wait_at(&self, _state: Arc<SimpleState>) -> bool {

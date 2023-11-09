@@ -1,8 +1,15 @@
-use std::{hash::Hash, marker::PhantomData, ops::Add, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashMap},
+    hash::Hash,
+    marker::PhantomData,
+    ops::Add,
+    sync::Arc,
+};
 
 use chrono::Duration;
 
-use crate::{State, Task, Time, TransitionSystem};
+use crate::{Interval, State, Task, Time, TransitionSystem};
 
 /// Description of a solution to a search problem
 #[derive(Debug)]
@@ -131,5 +138,155 @@ impl<S: Hash, C: Copy + Eq + Ord + Add<DC, Output = C>, DC: Copy> Ord for Search
         } else {
             (self.cost + self.heuristic).cmp(&(other.cost + other.heuristic))
         }
+    }
+}
+
+/// Constraint that prevents an agent from visiting the given state
+/// during a given interval.
+#[derive(Debug)]
+pub struct StateConstraint<S>
+where
+    S: State,
+{
+    pub state: Arc<S>,
+    pub interval: Interval,
+}
+
+impl<S> StateConstraint<S>
+where
+    S: State,
+{
+    pub fn new(state: Arc<S>, interval: Interval) -> Self {
+        Self { state, interval }
+    }
+}
+
+impl<S> PartialEq for StateConstraint<S>
+where
+    S: State,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.interval == other.interval
+    }
+}
+
+impl<S> Eq for StateConstraint<S> where S: State {}
+
+impl<S> PartialOrd for StateConstraint<S>
+where
+    S: State,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.interval.partial_cmp(&other.interval)
+    }
+}
+
+impl<S> Ord for StateConstraint<S>
+where
+    S: State,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.interval.cmp(&other.interval)
+    }
+}
+
+/// Constraint that prevents an agent from connecting the two given states
+/// during a given interval.
+pub struct ActionConstraint<S>
+where
+    S: State,
+{
+    pub from: Arc<S>,
+    pub to: Arc<S>,
+    pub interval: Interval,
+}
+
+impl<S> ActionConstraint<S>
+where
+    S: State,
+{
+    pub fn new(from: Arc<S>, to: Arc<S>, interval: Interval) -> Self {
+        Self { from, to, interval }
+    }
+}
+
+impl<S> PartialEq for ActionConstraint<S>
+where
+    S: State,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.interval == other.interval
+    }
+}
+
+impl<S> Eq for ActionConstraint<S> where S: State {}
+
+impl<S> PartialOrd for ActionConstraint<S>
+where
+    S: State,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.interval.partial_cmp(&other.interval)
+    }
+}
+
+impl<S> Ord for ActionConstraint<S>
+where
+    S: State,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.interval.cmp(&other.interval)
+    }
+}
+
+/// Set of constraints that can be used by a search algorithm.
+pub struct ConstraintSet<S>
+where
+    S: State + Eq + Hash,
+{
+    state_constraints: HashMap<Arc<S>, BTreeSet<StateConstraint<S>>>,
+    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<ActionConstraint<S>>>,
+}
+
+impl<S> Default for ConstraintSet<S>
+where
+    S: State + Eq + Hash,
+{
+    fn default() -> Self {
+        Self {
+            state_constraints: Default::default(),
+            action_constraints: Default::default(),
+        }
+    }
+}
+
+impl<S> ConstraintSet<S>
+where
+    S: State + Eq + Hash,
+{
+    pub fn add_state_constraint(&mut self, constraint: StateConstraint<S>) {
+        self.state_constraints
+            .entry(constraint.state.clone())
+            .or_default()
+            .insert(constraint);
+    }
+
+    pub fn add_action_constraint(&mut self, constraint: ActionConstraint<S>) {
+        self.action_constraints
+            .entry((constraint.from.clone(), constraint.to.clone()))
+            .or_default()
+            .insert(constraint);
+    }
+
+    pub fn get_state_constraints(&self, state: &Arc<S>) -> Option<&BTreeSet<StateConstraint<S>>> {
+        self.state_constraints.get(state)
+    }
+
+    pub fn get_action_constraints(
+        &self,
+        from: &Arc<S>,
+        to: &Arc<S>,
+    ) -> Option<&BTreeSet<ActionConstraint<S>>> {
+        self.action_constraints.get(&(from.clone(), to.clone()))
     }
 }

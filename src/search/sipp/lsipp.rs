@@ -3,8 +3,9 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, marker::PhantomData, syn
 use chrono::Duration;
 
 use crate::{
-    DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, SafeIntervalPathPlanning,
-    SippConfig, SippState, SippTask, Solution, State, Task, Time, TransitionSystem,
+    ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval,
+    SafeIntervalPathPlanning, SippConfig, SippState, SippTask, Solution, State, Task, Time,
+    TransitionSystem,
 };
 
 /// Implementation of Safe Interval Path Planning algorithm that supports landmarks
@@ -55,6 +56,7 @@ where
                 config.initial_time,
                 config.task.clone(),
                 Default::default(),
+                config.constraints.clone(),
                 self.get_heuristic(config, config.task.clone()),
             ))
         } else {
@@ -84,6 +86,7 @@ where
                 config.initial_time,
                 task.clone(),
                 config.intervals[0],
+                config.constraints.clone(),
                 self.get_heuristic(config, task),
             ),
             false,
@@ -126,6 +129,7 @@ where
                     }),
                     task.clone(),
                 )),
+                config.constraints.clone(),
                 self.get_heuristic(config, task),
                 false,
             );
@@ -158,6 +162,7 @@ where
                 }),
                 task.clone(),
             )),
+            config.constraints.clone(),
             self.get_heuristic(config, task),
             true,
         );
@@ -242,10 +247,11 @@ where
     A: Copy,
     H: Heuristic<TS, S, A, Time, Duration>,
 {
+    task: Arc<Task<S>>,
     initial_time: Time,
     landmarks: Vec<Arc<S>>,
     intervals: Vec<Interval>,
-    task: Arc<Task<S>>,
+    constraints: Arc<ConstraintSet<S>>,
     heuristic: Arc<H>,
     _phantom: PhantomData<(TS, A)>,
 }
@@ -258,17 +264,19 @@ where
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     pub fn new(
+        task: Arc<Task<S>>,
         initial_time: Time,
         landmarks: Vec<Arc<S>>,
         intervals: Vec<Interval>,
-        task: Arc<Task<S>>,
+        constraints: Arc<ConstraintSet<S>>,
         heuristic: Arc<H>,
     ) -> Self {
         Self {
+            task,
             initial_time,
             landmarks,
             intervals,
-            task,
+            constraints,
             heuristic,
             _phantom: PhantomData::default(),
         }
@@ -329,10 +337,11 @@ mod tests {
                     Arc::new(SimpleState(GraphNodeId(size * size - 1))),
                 ));
                 let mut config = LSippConfig::new(
+                    task.clone(),
                     initial_time,
                     vec![],
                     vec![],
-                    task.clone(),
+                    Default::default(),
                     Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),
@@ -341,8 +350,7 @@ mod tests {
                 );
                 assert_eq!(
                     *solver.solve(&mut config).unwrap().costs.last().unwrap(),
-                    initial_time
-                        + Duration::milliseconds((((size - x - 1) + (size - y - 1)) * 1000) as i64)
+                    initial_time + Duration::seconds(((size - x - 1) + (size - y - 1)) as i64)
                 );
             }
         }
@@ -361,13 +369,14 @@ mod tests {
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
         ));
         let mut config = LSippConfig::new(
+            task.clone(),
             initial_time,
             vec![
                 Arc::new(SimpleState(GraphNodeId(size - 1))),
                 Arc::new(SimpleState(GraphNodeId(size * (size - 1)))),
             ],
             vec![Interval::default(); 2],
-            task.clone(),
+            Default::default(),
             Arc::new(ReverseResumableAStar::new(
                 transition_system.clone(),
                 task.clone(),
@@ -376,7 +385,7 @@ mod tests {
         );
         assert_eq!(
             *solver.solve(&mut config).unwrap().costs.last().unwrap(),
-            initial_time + Duration::milliseconds((4 * (size - 1) * 1000) as i64)
+            initial_time + Duration::seconds((4 * (size - 1)) as i64)
         );
     }
 }
