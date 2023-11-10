@@ -278,8 +278,8 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    landmarks: Arc<LandmarkSet<S, C>>,
     constraints: Arc<ConstraintSet<S, C>>,
+    landmarks: Arc<LandmarkSet<S, C>>,
     /// A set of pivot states.
     pivots: Arc<Vec<Arc<S>>>,
     /// A set of heuristics to those pivot states.
@@ -305,14 +305,14 @@ where
 {
     pub fn new(
         task: Arc<Task<S, C>>,
-        landmarks: Arc<LandmarkSet<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
+        landmarks: Arc<LandmarkSet<S, C>>,
         heuristic: Arc<H>,
     ) -> Self {
         Self {
             task: task.clone(),
-            landmarks,
             constraints,
+            landmarks,
             pivots: Arc::new(vec![task.goal_state.clone()]),
             heuristic_to_pivots: Arc::new(vec![heuristic]),
             _phantom: PhantomData::default(),
@@ -321,15 +321,15 @@ where
 
     pub fn new_with_pivots(
         task: Arc<Task<S, C>>,
-        landmarks: Arc<LandmarkSet<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
+        landmarks: Arc<LandmarkSet<S, C>>,
         pivots: Arc<Vec<Arc<S>>>,
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     ) -> Self {
         Self {
             task,
-            landmarks,
             constraints,
+            landmarks,
             pivots,
             heuristic_to_pivots,
             _phantom: PhantomData::default(),
@@ -425,6 +425,7 @@ mod tests {
         ));
         let mut config = LSippConfig::new(
             task.clone(),
+            Default::default(),
             Arc::new(vec![
                 Arc::new(Constraint::new_state_constraint(
                     0,
@@ -437,7 +438,6 @@ mod tests {
                     Interval::default(),
                 )),
             ]),
-            Default::default(),
             Arc::new(ReverseResumableAStar::new(
                 transition_system.clone(),
                 task.clone(),

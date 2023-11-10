@@ -34,6 +34,7 @@ name = "cbs"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "tuple",
 ]
 
 [[package]]
@@ -149,6 +150,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde"
+version = "1.0.192"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bca2a08484b285dcb282d0f67b26cadc0df8b19f8c12502c13d966bf9482f001"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.192"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6c7207fbec9faa48073f3e3074cbe553af6ea512d7c21ba46e434e70ea9fbc1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -157,6 +178,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tuple"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39a40ba241047e1174c927dc5f61c141a166b938d61a2ff61838441368cc7d0e"
+dependencies = [
+ "num-traits",
+ "serde",
 ]
 
 [[package]]

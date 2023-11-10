@@ -4,9 +4,11 @@ use std::{
 };
 
 use chrono::{DateTime, Duration, Local, Utc};
+use tuple::A2;
 
 use crate::{
-    Graph, GraphEdgeId, GraphNodeId, Heuristic, LimitValues, Move, State, Task, TransitionSystem,
+    Constraint, Graph, GraphEdgeId, GraphNodeId, Heuristic, LimitValues, Move, State, Task,
+    TransitionSystem,
 };
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -82,14 +84,15 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyDuration> for SimpleWo
         true
     }
 
-    fn conflict(
-        &self,
-        _moves: (
-            &Move<SimpleState, GraphEdgeId, MyTime, MyDuration>,
-            &Move<SimpleState, GraphEdgeId, MyTime, MyDuration>,
-        ),
-    ) -> bool {
+    fn conflict(&self, _moves: A2<&Move<SimpleState, GraphEdgeId, MyTime, MyDuration>>) -> bool {
         todo!("Implement conflict detection for SimpleWorld")
+    }
+
+    fn get_constraint(
+        &self,
+        _moves: A2<&Move<SimpleState, GraphEdgeId, MyTime, MyDuration>>,
+    ) -> Constraint<SimpleState, MyTime> {
+        todo!("Implement constraint generation for SimpleWorld")
     }
 }
 

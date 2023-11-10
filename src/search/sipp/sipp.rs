@@ -657,16 +657,16 @@ mod tests {
         ];
 
         let mut constraints = ConstraintSet::default();
-        constraints.add_constraint(Constraint::new_state_constraint(
+        constraints.add(Arc::new(Constraint::new_state_constraint(
             0,
             state.clone(),
             Interval::new(dates[0], dates[1]),
-        ));
-        constraints.add_constraint(Constraint::new_state_constraint(
+        )));
+        constraints.add(Arc::new(Constraint::new_state_constraint(
             0,
             state.clone(),
             Interval::new(dates[2], dates[3]),
-        ));
+        )));
 
         let safe_intervals = SafeIntervalPathPlanning::<
             SimpleWorld,
@@ -712,16 +712,16 @@ mod tests {
                     Arc::new(SimpleState(GraphNodeId(l + size * k))),
                     Arc::new(SimpleState(GraphNodeId(k + size * l))),
                 ] {
-                    constraints.add_constraint(Constraint::new_state_constraint(
+                    constraints.add(Arc::new(Constraint::new_state_constraint(
                         0,
                         state.clone(),
                         Interval::new(dates[0], dates[1]),
-                    ));
-                    constraints.add_constraint(Constraint::new_state_constraint(
+                    )));
+                    constraints.add(Arc::new(Constraint::new_state_constraint(
                         0,
                         state.clone(),
                         Interval::new(dates[2], dates[3]),
-                    ));
+                    )));
                 }
             }
         }

@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.31"
+tuple = "0.5.1"

@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::{abstraction::TransitionSystem, Heuristic, Task};
-use crate::{SearchNode, State};
+use crate::{LimitValues, SearchNode, State};
 
 /// Implementation of the Reverse Resumable A* algorithm
 /// that computes the shortest path between:
@@ -23,7 +23,14 @@ pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
@@ -41,7 +48,14 @@ impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for ReverseResumableAStar<TS
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
@@ -54,7 +68,14 @@ impl<TS, S, A, C, DC, H> ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {

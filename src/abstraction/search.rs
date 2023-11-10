@@ -7,6 +7,8 @@ use std::{
     sync::Arc,
 };
 
+use tuple::A2;
+
 use crate::{Move, State, Task, TransitionSystem};
 
 /// Description of a solution to a search problem
@@ -39,7 +41,7 @@ pub trait Heuristic<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: Hash + Eq,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default,
+    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default + LimitValues,
 {
     /// Returns the heuristic value for the given state,
     /// or None if the goal state is not reachable from that state.
@@ -52,7 +54,7 @@ pub struct DifferentialHeuristic<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default + LimitValues,
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
@@ -65,7 +67,7 @@ impl<TS, S, A, C, DC, H> DifferentialHeuristic<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default + LimitValues,
     DC: Ord + Sub<DC, Output = DC> + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
@@ -87,7 +89,7 @@ impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for DifferentialHeuristic<TS
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default + LimitValues,
     DC: Ord + Sub<DC, Output = DC> + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
@@ -186,7 +188,7 @@ pub struct Conflict<S, A, C, DC>
 where
     C: Ord,
 {
-    pub moves: (Arc<Move<S, A, C, DC>>, Arc<Move<S, A, C, DC>>),
+    pub moves: A2<Arc<Move<S, A, C, DC>>>,
     pub type_: ConflictType,
 }
 
@@ -195,10 +197,7 @@ impl<S, A, C, DC> Conflict<S, A, C, DC>
 where
     C: Ord,
 {
-    pub fn new(
-        moves: (Arc<Move<S, A, C, DC>>, Arc<Move<S, A, C, DC>>),
-        type_: ConflictType,
-    ) -> Self {
+    pub fn new(moves: A2<Arc<Move<S, A, C, DC>>>, type_: ConflictType) -> Self {
         Self { moves, type_ }
     }
 }
@@ -285,7 +284,7 @@ where
 }
 
 /// The types of constraints that can be imposed on agents in a search algorithm.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ConstraintType {
     /// Constraint that prevents an agent from visiting the given state during a given interval.
     State,
@@ -294,7 +293,7 @@ pub enum ConstraintType {
 }
 
 /// Defines a constraint that can be imposed on a given agent in a search algorithm.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Constraint<S, C>
 where
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
@@ -370,8 +369,8 @@ where
     S: State + Eq + Hash,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    state_constraints: HashMap<Arc<S>, BTreeSet<Constraint<S, C>>>,
-    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<Constraint<S, C>>>,
+    state_constraints: HashMap<Arc<S>, BTreeSet<Arc<Constraint<S, C>>>>,
+    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<Arc<Constraint<S, C>>>>,
 }
 
 impl<S, C> Default for ConstraintSet<S, C>
@@ -392,7 +391,7 @@ where
     S: State + Eq + Hash,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn add_constraint(&mut self, constraint: Constraint<S, C>) {
+    pub fn add(&mut self, constraint: Arc<Constraint<S, C>>) {
         match constraint.type_ {
             ConstraintType::State => {
                 self.state_constraints
@@ -412,7 +411,10 @@ where
         }
     }
 
-    pub fn get_state_constraints(&self, state: &Arc<S>) -> Option<&BTreeSet<Constraint<S, C>>> {
+    pub fn get_state_constraints(
+        &self,
+        state: &Arc<S>,
+    ) -> Option<&BTreeSet<Arc<Constraint<S, C>>>> {
         self.state_constraints.get(state)
     }
 
@@ -420,7 +422,7 @@ where
         &self,
         from: &Arc<S>,
         to: &Arc<S>,
-    ) -> Option<&BTreeSet<Constraint<S, C>>> {
+    ) -> Option<&BTreeSet<Arc<Constraint<S, C>>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 }
