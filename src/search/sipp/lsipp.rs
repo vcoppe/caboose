@@ -8,8 +8,8 @@ use std::{
 };
 
 use crate::{
-    ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, LimitValues,
-    SafeIntervalPathPlanning, SippConfig, SippState, SippTask, Solution, State, Task,
+    ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, LandmarkSet,
+    LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippTask, Solution, State, Task,
     TransitionSystem,
 };
 
@@ -98,13 +98,13 @@ where
     fn to_first_landmark(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
         let task = Arc::new(Task::new(
             config.task.initial_state.clone(),
-            config.landmarks[0].clone(),
+            config.landmarks[0].state.clone(),
             config.task.initial_cost,
         ));
         let config = self.sipp.to_generalized(
             &mut SippConfig::new(
                 task.clone(),
-                config.intervals[0],
+                config.landmarks[0].interval.clone(),
                 config.constraints.clone(),
                 self.get_heuristic(config, task),
             ),
@@ -124,16 +124,10 @@ where
 
     // Connect all landmarks sequentially
     fn between_landmarks(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
-        for (i, (landmark, interval)) in config
-            .landmarks
-            .iter()
-            .zip(config.intervals.iter())
-            .enumerate()
-            .skip(1)
-        {
+        for (i, landmark) in config.landmarks.iter().enumerate().skip(1) {
             let task = Arc::new(Task::new(
-                config.landmarks[i - 1].clone(),
-                landmark.clone(),
+                config.landmarks[i - 1].state.clone(),
+                landmark.state.clone(),
                 config.task.initial_cost,
             ));
             let config = GeneralizedSippConfig::new(
@@ -147,8 +141,8 @@ where
                         .map(|s| s.states.last().unwrap().clone())
                         .collect(),
                     Arc::new(SippState {
-                        safe_interval: *interval,
-                        internal_state: landmark.clone(),
+                        safe_interval: landmark.interval.clone(),
+                        internal_state: landmark.state.clone(),
                     }),
                     task.clone(),
                 )),
@@ -166,7 +160,7 @@ where
     // Go from the last landmark to the goal state
     fn to_goal(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
         let task = Arc::new(Task::new(
-            config.landmarks.last().unwrap().clone(),
+            config.landmarks[config.landmarks.len() - 1].state.clone(),
             config.task.goal_state.clone(),
             config.task.initial_cost,
         ));
@@ -284,8 +278,7 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    landmarks: Vec<Arc<S>>,
-    intervals: Vec<Interval<C>>,
+    landmarks: Arc<LandmarkSet<S, C>>,
     constraints: Arc<ConstraintSet<S, C>>,
     /// A set of pivot states.
     pivots: Arc<Vec<Arc<S>>>,
@@ -312,15 +305,13 @@ where
 {
     pub fn new(
         task: Arc<Task<S, C>>,
-        landmarks: Vec<Arc<S>>,
-        intervals: Vec<Interval<C>>,
+        landmarks: Arc<LandmarkSet<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
     ) -> Self {
         Self {
             task: task.clone(),
             landmarks,
-            intervals,
             constraints,
             pivots: Arc::new(vec![task.goal_state.clone()]),
             heuristic_to_pivots: Arc::new(vec![heuristic]),
@@ -330,8 +321,7 @@ where
 
     pub fn new_with_pivots(
         task: Arc<Task<S, C>>,
-        landmarks: Vec<Arc<S>>,
-        intervals: Vec<Interval<C>>,
+        landmarks: Arc<LandmarkSet<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
         pivots: Arc<Vec<Arc<S>>>,
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
@@ -339,7 +329,6 @@ where
         Self {
             task,
             landmarks,
-            intervals,
             constraints,
             pivots,
             heuristic_to_pivots,
@@ -355,8 +344,9 @@ mod tests {
     use chrono::{Duration, Local, TimeZone};
 
     use crate::{
-        Graph, GraphNodeId, Interval, LSippConfig, MyDuration, MyTime, ReverseResumableAStar,
-        SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState, SimpleWorld, Task,
+        Constraint, Graph, GraphNodeId, Interval, LSippConfig, MyDuration, MyTime,
+        ReverseResumableAStar, SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState,
+        SimpleWorld, Task,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
@@ -403,8 +393,7 @@ mod tests {
                 ));
                 let mut config = LSippConfig::new(
                     task.clone(),
-                    vec![],
-                    vec![],
+                    Default::default(),
                     Default::default(),
                     Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
@@ -436,11 +425,18 @@ mod tests {
         ));
         let mut config = LSippConfig::new(
             task.clone(),
-            vec![
-                Arc::new(SimpleState(GraphNodeId(size - 1))),
-                Arc::new(SimpleState(GraphNodeId(size * (size - 1)))),
-            ],
-            vec![Interval::default(); 2],
+            Arc::new(vec![
+                Arc::new(Constraint::new_state_constraint(
+                    0,
+                    Arc::new(SimpleState(GraphNodeId(size - 1))),
+                    Interval::default(),
+                )),
+                Arc::new(Constraint::new_state_constraint(
+                    0,
+                    Arc::new(SimpleState(GraphNodeId(size * (size - 1)))),
+                    Interval::default(),
+                )),
+            ]),
             Default::default(),
             Arc::new(ReverseResumableAStar::new(
                 transition_system.clone(),

@@ -297,7 +297,6 @@ pub enum ConstraintType {
 #[derive(Debug)]
 pub struct Constraint<S, C>
 where
-    S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     pub agent: usize,
@@ -309,7 +308,6 @@ where
 
 impl<S, C> Constraint<S, C>
 where
-    S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     pub fn new_state_constraint(agent: usize, state: Arc<S>, interval: Interval<C>) -> Self {
@@ -339,7 +337,6 @@ where
 
 impl<S, C> PartialEq for Constraint<S, C>
 where
-    S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -347,16 +344,10 @@ where
     }
 }
 
-impl<S, C> Eq for Constraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-}
+impl<S, C> Eq for Constraint<S, C> where C: PartialEq + Eq + PartialOrd + Ord + LimitValues {}
 
 impl<S, C> PartialOrd for Constraint<S, C>
 where
-    S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -366,7 +357,6 @@ where
 
 impl<S, C> Ord for Constraint<S, C>
 where
-    S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -434,3 +424,5 @@ where
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 }
+
+pub type LandmarkSet<S, C> = Vec<Arc<Constraint<S, C>>>;

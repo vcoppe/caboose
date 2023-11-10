@@ -93,7 +93,6 @@ where
                 task.clone(),
                 Default::default(),
                 Default::default(),
-                Default::default(),
                 config.pivots.clone(),
                 config.heuristic_to_pivots.clone(),
             );
