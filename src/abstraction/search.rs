@@ -3,13 +3,11 @@ use std::{
     collections::{BTreeSet, HashMap},
     hash::Hash,
     marker::PhantomData,
-    ops::Add,
+    ops::{Add, Sub},
     sync::Arc,
 };
 
-use chrono::Duration;
-
-use crate::{Interval, Move, State, Task, Time, TransitionSystem};
+use crate::{Move, State, Task, TransitionSystem};
 
 /// Description of a solution to a search problem
 #[derive(Debug, Clone)]
@@ -50,26 +48,29 @@ where
 
 /// Differentiable heuristic built on top of heuristics dealing with
 /// time and durations.
-pub struct DifferentialHeuristic<TS, S, A, H>
+pub struct DifferentialHeuristic<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    H: Heuristic<TS, S, A, C, DC>,
 {
-    task: Arc<Task<S, Time>>,
+    task: Arc<Task<S, C>>,
     pivots: Arc<Vec<Arc<S>>>,
     heuristic_to_pivots: Arc<Vec<Arc<H>>>,
-    _phantom: PhantomData<(TS, S, A)>,
+    _phantom: PhantomData<(TS, S, A, DC)>,
 }
 
-impl<TS, S, A, H> DifferentialHeuristic<TS, S, A, H>
+impl<TS, S, A, C, DC, H> DifferentialHeuristic<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    DC: Ord + Sub<DC, Output = DC> + Copy,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
-        task: Arc<Task<S, Time>>,
+        task: Arc<Task<S, C>>,
         pivots: Arc<Vec<Arc<S>>>,
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     ) -> Self {
@@ -82,14 +83,16 @@ where
     }
 }
 
-impl<TS, S, A, H> Heuristic<TS, S, A, Time, Duration> for DifferentialHeuristic<TS, S, A, H>
+impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for DifferentialHeuristic<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default,
+    DC: Ord + Sub<DC, Output = DC> + Copy,
+    H: Heuristic<TS, S, A, C, DC>,
 {
-    fn get_heuristic(&self, state: Arc<S>) -> Option<Duration> {
-        let mut heuristic = Duration::zero();
+    fn get_heuristic(&self, state: Arc<S>) -> Option<DC> {
+        let mut heuristic = C::default() - C::default();
         for (pivot, heuristic_to_pivot) in self.pivots.iter().zip(self.heuristic_to_pivots.iter()) {
             if pivot.is_equivalent(self.task.goal_state.as_ref()) {
                 if let Some(h) = heuristic_to_pivot.get_heuristic(state.clone()) {
@@ -99,7 +102,7 @@ where
                 heuristic_to_pivot.get_heuristic(state.clone()),
                 heuristic_to_pivot.get_heuristic(self.task.goal_state.clone()),
             ) {
-                heuristic = heuristic.max((h2 - h1).abs());
+                heuristic = heuristic.max(h2 - h1).max(h1 - h2)
             }
         }
         Some(heuristic)
@@ -245,49 +248,93 @@ where
     }
 }
 
+/// Trait to specify the minimum and maximum values of a type.
+pub trait LimitValues {
+    fn min_value() -> Self;
+    fn max_value() -> Self;
+}
+
+/// Defines a time interval (start <= end).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Interval<C>
+where
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+{
+    pub start: C,
+    pub end: C,
+}
+
+impl<C> Default for Interval<C>
+where
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+{
+    fn default() -> Self {
+        Self::new(C::min_value(), C::max_value())
+    }
+}
+
+impl<C> Interval<C>
+where
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+{
+    pub fn new(start: C, end: C) -> Self {
+        Self { start, end }
+    }
+}
+
 /// Constraint that prevents an agent from visiting the given state
 /// during a given interval.
 #[derive(Debug)]
-pub struct StateConstraint<S>
+pub struct StateConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     pub state: Arc<S>,
-    pub interval: Interval,
+    pub interval: Interval<C>,
 }
 
-impl<S> StateConstraint<S>
+impl<S, C> StateConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn new(state: Arc<S>, interval: Interval) -> Self {
+    pub fn new(state: Arc<S>, interval: Interval<C>) -> Self {
         Self { state, interval }
     }
 }
 
-impl<S> PartialEq for StateConstraint<S>
+impl<S, C> PartialEq for StateConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn eq(&self, other: &Self) -> bool {
         self.interval == other.interval
     }
 }
 
-impl<S> Eq for StateConstraint<S> where S: State {}
-
-impl<S> PartialOrd for StateConstraint<S>
+impl<S, C> Eq for StateConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+{
+}
+
+impl<S, C> PartialOrd for StateConstraint<S, C>
+where
+    S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.interval.partial_cmp(&other.interval)
     }
 }
 
-impl<S> Ord for StateConstraint<S>
+impl<S, C> Ord for StateConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.interval.cmp(&other.interval)
@@ -296,47 +343,57 @@ where
 
 /// Constraint that prevents an agent from connecting the two given states
 /// during a given interval.
-pub struct ActionConstraint<S>
+pub struct ActionConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     pub from: Arc<S>,
     pub to: Arc<S>,
-    pub interval: Interval,
+    pub interval: Interval<C>,
 }
 
-impl<S> ActionConstraint<S>
+impl<S, C> ActionConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn new(from: Arc<S>, to: Arc<S>, interval: Interval) -> Self {
+    pub fn new(from: Arc<S>, to: Arc<S>, interval: Interval<C>) -> Self {
         Self { from, to, interval }
     }
 }
 
-impl<S> PartialEq for ActionConstraint<S>
+impl<S, C> PartialEq for ActionConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn eq(&self, other: &Self) -> bool {
         self.interval == other.interval
     }
 }
 
-impl<S> Eq for ActionConstraint<S> where S: State {}
-
-impl<S> PartialOrd for ActionConstraint<S>
+impl<S, C> Eq for ActionConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+{
+}
+
+impl<S, C> PartialOrd for ActionConstraint<S, C>
+where
+    S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.interval.partial_cmp(&other.interval)
     }
 }
 
-impl<S> Ord for ActionConstraint<S>
+impl<S, C> Ord for ActionConstraint<S, C>
 where
     S: State,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.interval.cmp(&other.interval)
@@ -344,17 +401,19 @@ where
 }
 
 /// Set of constraints that can be used by a search algorithm.
-pub struct ConstraintSet<S>
+pub struct ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    state_constraints: HashMap<Arc<S>, BTreeSet<StateConstraint<S>>>,
-    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<ActionConstraint<S>>>,
+    state_constraints: HashMap<Arc<S>, BTreeSet<StateConstraint<S, C>>>,
+    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<ActionConstraint<S, C>>>,
 }
 
-impl<S> Default for ConstraintSet<S>
+impl<S, C> Default for ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn default() -> Self {
         Self {
@@ -364,25 +423,29 @@ where
     }
 }
 
-impl<S> ConstraintSet<S>
+impl<S, C> ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn add_state_constraint(&mut self, constraint: StateConstraint<S>) {
+    pub fn add_state_constraint(&mut self, constraint: StateConstraint<S, C>) {
         self.state_constraints
             .entry(constraint.state.clone())
             .or_default()
             .insert(constraint);
     }
 
-    pub fn add_action_constraint(&mut self, constraint: ActionConstraint<S>) {
+    pub fn add_action_constraint(&mut self, constraint: ActionConstraint<S, C>) {
         self.action_constraints
             .entry((constraint.from.clone(), constraint.to.clone()))
             .or_default()
             .insert(constraint);
     }
 
-    pub fn get_state_constraints(&self, state: &Arc<S>) -> Option<&BTreeSet<StateConstraint<S>>> {
+    pub fn get_state_constraints(
+        &self,
+        state: &Arc<S>,
+    ) -> Option<&BTreeSet<StateConstraint<S, C>>> {
         self.state_constraints.get(state)
     }
 
@@ -390,7 +453,7 @@ where
         &self,
         from: &Arc<S>,
         to: &Arc<S>,
-    ) -> Option<&BTreeSet<ActionConstraint<S>>> {
+    ) -> Option<&BTreeSet<ActionConstraint<S, C>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 }

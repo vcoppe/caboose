@@ -19,8 +19,6 @@ use crate::{SearchNode, State};
 /// - any state of a given transition system, and
 /// - the goal state of a given task in this transition system.
 /// The shortest paths are computed on demand by the heuristic requests.
-/// This algorithm should not be used for Timed states, as it aims to compute
-/// time-independent shortest paths between states.
 pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
@@ -176,8 +174,8 @@ mod tests {
     use chrono::{Duration, Local, TimeZone};
 
     use crate::{
-        Graph, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic, SimpleState,
-        SimpleWorld, Task,
+        Graph, GraphNodeId, Heuristic, MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic,
+        SimpleState, SimpleWorld, Task,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
@@ -215,7 +213,7 @@ mod tests {
         let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
-            Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap(),
+            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap()),
         ));
         let heuristic = ReverseResumableAStar::new(
             transition_system.clone(),
@@ -229,7 +227,7 @@ mod tests {
                     heuristic
                         .get_heuristic(Arc::new(SimpleState(GraphNodeId(x + y * size))))
                         .unwrap(),
-                    Duration::seconds(((size - x - 1) + (size - y - 1)) as i64)
+                    MyDuration(Duration::seconds(((size - x - 1) + (size - y - 1)) as i64))
                 );
             }
         }

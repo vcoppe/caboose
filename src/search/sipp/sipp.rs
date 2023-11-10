@@ -7,40 +7,62 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
+    ops::{Add, Sub},
     sync::Arc,
     vec,
 };
 
-use chrono::Duration;
-
 use crate::{
-    ConstraintSet, Heuristic, Interval, SearchNode, Solution, State, Task, Time, TransitionSystem,
+    ConstraintSet, Heuristic, Interval, LimitValues, SearchNode, Solution, State, Task,
+    TransitionSystem,
 };
 
 /// Implementation of the Safe Interval Path Planning algorithm that computes
 /// the optimal sequence of actions to complete a given task in a given transition system,
 /// while avoiding conflicts with other agents in the same environment.
-pub struct SafeIntervalPathPlanning<TS, S, A, H>
+pub struct SafeIntervalPathPlanning<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: Debug + Copy + Hash + Eq,
     A: Copy,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Hash
+        + Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Copy + Default,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
-    queue: BinaryHeap<Reverse<SearchNode<SippState<S>, Time, Duration>>>,
-    distance: HashMap<Arc<SippState<S>>, Time>,
-    closed: HashSet<Arc<SippState<S>>>,
-    parent: HashMap<Arc<SippState<S>>, (A, Arc<SippState<S>>)>,
+    queue: BinaryHeap<Reverse<SearchNode<SippState<S, C>, C, DC>>>,
+    distance: HashMap<Arc<SippState<S, C>>, C>,
+    closed: HashSet<Arc<SippState<S, C>>>,
+    parent: HashMap<Arc<SippState<S, C>>, (A, Arc<SippState<S, C>>)>,
     _phantom: PhantomData<(A, H)>,
 }
 
-impl<TS, S, A, H> SafeIntervalPathPlanning<TS, S, A, H>
+impl<TS, S, A, C, DC, H> SafeIntervalPathPlanning<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Hash
+        + Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Copy + Default,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm.
     pub fn new(transition_system: Arc<TS>) -> Self {
@@ -58,9 +80,9 @@ where
     // safe intervals exist for the initial state.
     pub fn to_generalized(
         &self,
-        config: &SippConfig<TS, S, A, H>,
+        config: &SippConfig<TS, S, A, C, DC, H>,
         single_path: bool,
-    ) -> Option<GeneralizedSippConfig<TS, S, A, H>> {
+    ) -> Option<GeneralizedSippConfig<TS, S, A, C, DC, H>> {
         let initial_state = config.task.initial_state.clone();
         let initial_time = config.task.initial_cost;
         let goal_state = config.task.goal_state.clone();
@@ -84,12 +106,12 @@ where
             internal_state: goal_state,
         });
 
-        let sipp_task = Arc::new(SippTask {
-            initial_times: vec![initial_time],
-            initial_states: vec![initial_state],
+        let sipp_task = Arc::new(SippTask::new(
+            vec![initial_time],
+            vec![initial_state],
             goal_state,
-            internal_task: config.task.clone(),
-        });
+            config.task.clone(),
+        ));
 
         Some(GeneralizedSippConfig::new(
             sipp_task,
@@ -102,8 +124,8 @@ where
     /// Attempts to solve the given configuration, and returns the optimal solution if any.
     pub fn solve(
         &mut self,
-        config: &SippConfig<TS, S, A, H>,
-    ) -> Option<Solution<Arc<SippState<S>>, A, Time>> {
+        config: &SippConfig<TS, S, A, C, DC, H>,
+    ) -> Option<Solution<Arc<SippState<S, C>>, A, C>> {
         self.to_generalized(config, true)
             .map(|config| self.solve_generalized(&config).pop())
             .flatten()
@@ -111,8 +133,8 @@ where
     /// Attempts to solve the given generalized configuration, and returns the optimal solution if any.
     pub fn solve_generalized(
         &mut self,
-        config: &GeneralizedSippConfig<TS, S, A, H>,
-    ) -> Vec<Solution<Arc<SippState<S>>, A, Time>> {
+        config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
+    ) -> Vec<Solution<Arc<SippState<S, C>>, A, C>> {
         self.init(config);
         self.find_paths(config)
             .iter()
@@ -122,7 +144,7 @@ where
 
     /// Initializes the search algorithm by clearing the data structures
     /// and enqueueing the initial states.
-    fn init(&mut self, config: &GeneralizedSippConfig<TS, S, A, H>) {
+    fn init(&mut self, config: &GeneralizedSippConfig<TS, S, A, C, DC, H>) {
         self.queue.clear();
         self.distance.clear();
         self.closed.clear();
@@ -137,7 +159,7 @@ where
             let initial_node = SearchNode {
                 state: initial_state.clone(),
                 cost: *initial_time,
-                heuristic: Duration::seconds(0),
+                heuristic: DC::default(),
             };
 
             self.distance
@@ -150,8 +172,8 @@ where
     /// at the goal state.
     fn find_paths(
         &mut self,
-        config: &GeneralizedSippConfig<TS, S, A, H>,
-    ) -> Vec<SearchNode<SippState<S>, Time, Duration>> {
+        config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
+    ) -> Vec<SearchNode<SippState<S, C>, C, DC>> {
         let mut goals = vec![];
 
         while let Some(Reverse(current)) = self.queue.pop() {
@@ -182,9 +204,9 @@ where
     /// Generates the reachable successors of the given search node.
     fn get_successors(
         &mut self,
-        config: &GeneralizedSippConfig<TS, S, A, H>,
-        current: &SearchNode<SippState<S>, Time, Duration>,
-    ) -> Vec<SearchNode<SippState<S>, Time, Duration>> {
+        config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
+        current: &SearchNode<SippState<S, C>, C, DC>,
+    ) -> Vec<SearchNode<SippState<S, C>, C, DC>> {
         let mut successors = vec![];
 
         for action in self
@@ -317,8 +339,8 @@ where
     /// Reconstructs the solution from the given goal search node.
     fn get_solution(
         &self,
-        goal: &SearchNode<SippState<S>, Time, Duration>,
-    ) -> Solution<Arc<SippState<S>>, A, Time> {
+        goal: &SearchNode<SippState<S, C>, C, DC>,
+    ) -> Solution<Arc<SippState<S, C>>, A, C> {
         let mut solution = Solution::default();
         let mut current = goal.state.clone();
 
@@ -340,7 +362,10 @@ where
     }
 
     /// Returns the safe intervals for the given state, given a set of constraints.
-    fn get_safe_intervals(constraints: Arc<ConstraintSet<S>>, state: &Arc<S>) -> Vec<Interval> {
+    fn get_safe_intervals(
+        constraints: Arc<ConstraintSet<S, C>>,
+        state: &Arc<S>,
+    ) -> Vec<Interval<C>> {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
             let mut safe_intervals = vec![];
 
@@ -365,31 +390,47 @@ where
 }
 
 /// Input configuration for the Safe Interval Path Planning algorithm.
-pub struct SippConfig<TS, S, A, H>
+pub struct SippConfig<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    H: Heuristic<TS, S, A, C, DC>,
 {
-    task: Arc<Task<S, Time>>,
-    interval: Interval,
-    constraints: Arc<ConstraintSet<S>>,
+    task: Arc<Task<S, C>>,
+    interval: Interval<C>,
+    constraints: Arc<ConstraintSet<S, C>>,
     heuristic: Arc<H>,
     _phantom: PhantomData<(TS, S, A)>,
 }
 
-impl<TS, S, A, H> SippConfig<TS, S, A, H>
+impl<TS, S, A, C, DC, H> SippConfig<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
-        task: Arc<Task<S, Time>>,
-        interval: Interval,
-        constraints: Arc<ConstraintSet<S>>,
+        task: Arc<Task<S, C>>,
+        interval: Interval<C>,
+        constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
     ) -> Self {
         SippConfig {
@@ -403,30 +444,48 @@ where
 }
 
 /// Input configuration for the Generalized Safe Interval Path Planning algorithm.
-pub struct GeneralizedSippConfig<TS, S, A, H>
+pub struct GeneralizedSippConfig<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Copy,
+    H: Heuristic<TS, S, A, C, DC>,
 {
-    task: Arc<SippTask<S>>,
-    constraints: Arc<ConstraintSet<S>>,
+    task: Arc<SippTask<S, C, DC>>,
+    constraints: Arc<ConstraintSet<S, C>>,
     heuristic: Arc<H>,
     single_path: bool,
     _phantom: PhantomData<(TS, S, A)>,
 }
 
-impl<TS, S, A, H> GeneralizedSippConfig<TS, S, A, H>
+impl<TS, S, A, C, DC, H> GeneralizedSippConfig<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, Time, Duration>,
+    TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Copy + Hash + Eq,
     A: Copy,
-    H: Heuristic<TS, S, A, Time, Duration>,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Copy,
+    H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
-        task: Arc<SippTask<S>>,
-        constraints: Arc<ConstraintSet<S>>,
+        task: Arc<SippTask<S, C, DC>>,
+        constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
         single_path: bool,
     ) -> Self {
@@ -443,45 +502,66 @@ where
 /// State wrapper for the Safe Interval Path Planning algorithm that extends
 /// a given state definition with a safe interval.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct SippState<S>
+pub struct SippState<S, C>
 where
     S: Debug + Eq,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub safe_interval: Interval,
+    pub safe_interval: Interval<C>,
     pub internal_state: Arc<S>,
 }
 
 /// Task wrapper for the Safe Interval Path Planning algorithm that extends
 /// a given task definition with all SIPP states that correspong to it.
-pub struct SippTask<S>
+pub struct SippTask<S, C, DC>
 where
     S: State + Debug + Hash + Eq,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Copy,
 {
-    initial_times: Vec<Time>,
-    initial_states: Vec<Arc<SippState<S>>>,
-    goal_state: Arc<SippState<S>>,
-    internal_task: Arc<Task<S, Time>>,
+    initial_times: Vec<C>,
+    initial_states: Vec<Arc<SippState<S, C>>>,
+    goal_state: Arc<SippState<S, C>>,
+    internal_task: Arc<Task<S, C>>,
+    _phantom: PhantomData<DC>,
 }
 
-impl<S> SippTask<S>
+impl<S, C, DC> SippTask<S, C, DC>
 where
     S: State + Debug + Hash + Eq,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Copy,
 {
     pub fn new(
-        initial_times: Vec<Time>,
-        initial_states: Vec<Arc<SippState<S>>>,
-        goal_state: Arc<SippState<S>>,
-        internal_task: Arc<Task<S, Time>>,
+        initial_times: Vec<C>,
+        initial_states: Vec<Arc<SippState<S, C>>>,
+        goal_state: Arc<SippState<S, C>>,
+        internal_task: Arc<Task<S, C>>,
     ) -> Self {
         SippTask {
             initial_times,
             initial_states,
             goal_state,
             internal_task,
+            _phantom: PhantomData::default(),
         }
     }
 
-    fn is_goal(&self, state: &SearchNode<SippState<S>, Time, Duration>) -> bool {
+    fn is_goal(&self, state: &SearchNode<SippState<S, C>, C, DC>) -> bool {
         state.cost >= self.goal_state.safe_interval.start
             && state.cost <= self.goal_state.safe_interval.end
             && self
@@ -498,7 +578,8 @@ mod tests {
 
     use crate::{
         search::sipp::sipp::SippConfig, ConstraintSet, Graph, GraphEdgeId, GraphNodeId, Interval,
-        ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, StateConstraint, Task,
+        MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld,
+        StateConstraint, Task,
     };
 
     use super::SafeIntervalPathPlanning;
@@ -535,7 +616,7 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap();
+        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         for x in 0..size {
@@ -557,7 +638,8 @@ mod tests {
                 );
                 assert_eq!(
                     *solver.solve(&config).unwrap().costs.last().unwrap(),
-                    initial_time + Duration::seconds(((size - x - 1) + (size - y - 1)) as i64)
+                    initial_time
+                        + MyDuration(Duration::seconds(((size - x - 1) + (size - y - 1)) as i64))
                 );
             }
         }
@@ -568,10 +650,10 @@ mod tests {
         let state = Arc::new(SimpleState(GraphNodeId(0)));
 
         let dates = vec![
-            Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap(),
-            Local.with_ymd_and_hms(2000, 01, 01, 11, 0, 0).unwrap(),
-            Local.with_ymd_and_hms(2000, 01, 01, 12, 0, 0).unwrap(),
-            Local.with_ymd_and_hms(2000, 01, 01, 13, 0, 0).unwrap(),
+            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap()),
+            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 11, 0, 0).unwrap()),
+            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 12, 0, 0).unwrap()),
+            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 13, 0, 0).unwrap()),
         ];
 
         let mut constraints = ConstraintSet::default();
@@ -588,6 +670,8 @@ mod tests {
             SimpleWorld,
             SimpleState,
             GraphEdgeId,
+            MyTime,
+            MyDuration,
             SimpleHeuristic,
         >::get_safe_intervals(Arc::new(constraints), &state);
 
@@ -603,7 +687,7 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap();
+        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
@@ -613,10 +697,10 @@ mod tests {
         ));
 
         let dates = vec![
-            initial_time + Duration::seconds(2),
-            initial_time + Duration::seconds(8),
-            initial_time + Duration::seconds(12),
-            initial_time + Duration::seconds(18),
+            initial_time + MyDuration(Duration::seconds(2)),
+            initial_time + MyDuration(Duration::seconds(8)),
+            initial_time + MyDuration(Duration::seconds(12)),
+            initial_time + MyDuration(Duration::seconds(18)),
         ];
 
         let mut constraints = ConstraintSet::default();
@@ -653,7 +737,7 @@ mod tests {
 
         assert_eq!(
             *solution.costs.last().unwrap(),
-            initial_time + Duration::seconds(24)
+            initial_time + MyDuration(Duration::seconds(24))
         );
     }
 }

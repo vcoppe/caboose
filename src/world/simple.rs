@@ -1,10 +1,19 @@
-use std::sync::Arc;
+use std::{
+    ops::{Add, Sub},
+    sync::Arc,
+};
 
-use chrono::Duration;
+use chrono::{DateTime, Duration, Local, Utc};
 
 use crate::{
-    Graph, GraphEdgeId, GraphNodeId, Heuristic, Move, State, Task, Time, TransitionSystem,
+    Graph, GraphEdgeId, GraphNodeId, Heuristic, LimitValues, Move, State, Task, TransitionSystem,
 };
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub struct MyTime(pub DateTime<Local>);
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub struct MyDuration(pub Duration);
 
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
@@ -16,16 +25,16 @@ impl SimpleWorld {
         SimpleWorld { graph }
     }
 
-    pub fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> Duration {
+    pub fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> MyDuration {
         let from = self.graph.get_node(from);
         let to = self.graph.get_node(to);
         let dx = to.position.0 - from.position.0;
         let dy = to.position.1 - from.position.1;
         let distance = (dx * dx + dy * dy).sqrt();
-        Duration::milliseconds((distance * 1000.0).round() as i64)
+        MyDuration(Duration::milliseconds((distance * 1000.0).round() as i64))
     }
 
-    pub fn time(&self, edge: GraphEdgeId) -> Duration {
+    pub fn time(&self, edge: GraphEdgeId) -> MyDuration {
         let edge = self.graph.get_edge(edge);
         self.time_between(edge.from, edge.to)
     }
@@ -40,7 +49,7 @@ impl State for SimpleState {
     }
 }
 
-impl TransitionSystem<SimpleState, GraphEdgeId, Time, Duration> for SimpleWorld {
+impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyDuration> for SimpleWorld {
     fn actions_from(&self, state: Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
         self.graph.get_edges_out(state.0).iter()
     }
@@ -49,7 +58,7 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Time, Duration> for SimpleWorld 
         SimpleState(self.graph.get_edge(*action).to)
     }
 
-    fn transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> Duration {
+    fn transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> MyDuration {
         self.time(*action)
     }
 
@@ -61,7 +70,11 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Time, Duration> for SimpleWorld 
         SimpleState(self.graph.get_edge(*action).from)
     }
 
-    fn reverse_transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> Duration {
+    fn reverse_transition_cost(
+        &self,
+        _state: Arc<SimpleState>,
+        action: &GraphEdgeId,
+    ) -> MyDuration {
         self.time(*action)
     }
 
@@ -72,8 +85,8 @@ impl TransitionSystem<SimpleState, GraphEdgeId, Time, Duration> for SimpleWorld 
     fn conflict(
         &self,
         _moves: (
-            &Move<SimpleState, GraphEdgeId, Time, Duration>,
-            &Move<SimpleState, GraphEdgeId, Time, Duration>,
+            &Move<SimpleState, GraphEdgeId, MyTime, MyDuration>,
+            &Move<SimpleState, GraphEdgeId, MyTime, MyDuration>,
         ),
     ) -> bool {
         todo!("Implement conflict detection for SimpleWorld")
@@ -86,7 +99,7 @@ pub struct SimpleHeuristic {
 }
 
 impl SimpleHeuristic {
-    pub fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState, Time>>) -> Self {
+    pub fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState, MyTime>>) -> Self {
         SimpleHeuristic {
             transition_system,
             goal_state: task.goal_state.clone(),
@@ -94,11 +107,65 @@ impl SimpleHeuristic {
     }
 }
 
-impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, Time, Duration> for SimpleHeuristic {
-    fn get_heuristic(&self, state: Arc<SimpleState>) -> Option<Duration> {
+impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyDuration> for SimpleHeuristic {
+    fn get_heuristic(&self, state: Arc<SimpleState>) -> Option<MyDuration> {
         Some(
             self.transition_system
                 .time_between(state.0, self.goal_state.0),
         )
+    }
+}
+
+impl LimitValues for MyTime {
+    fn min_value() -> Self {
+        MyTime(DateTime::<Utc>::MIN_UTC.into())
+    }
+
+    fn max_value() -> Self {
+        MyTime((DateTime::<Utc>::MAX_UTC - Duration::days(1)).into())
+    }
+}
+
+impl Default for MyTime {
+    fn default() -> Self {
+        MyTime(DateTime::<Utc>::MIN_UTC.into())
+    }
+}
+
+impl Default for MyDuration {
+    fn default() -> Self {
+        MyDuration(Duration::zero())
+    }
+}
+
+impl Add<MyDuration> for MyTime {
+    type Output = Self;
+
+    fn add(self, rhs: MyDuration) -> Self::Output {
+        MyTime(self.0 + rhs.0)
+    }
+}
+
+impl Sub<MyDuration> for MyTime {
+    type Output = Self;
+
+    fn sub(self, rhs: MyDuration) -> Self::Output {
+        MyTime(self.0 - rhs.0)
+    }
+}
+
+impl Sub<MyTime> for MyTime {
+    type Output = MyDuration;
+
+    fn sub(self, rhs: MyTime) -> Self::Output {
+        MyDuration(self.0 - rhs.0)
+    }
+}
+
+impl Sub<MyDuration> for MyDuration {
+    type Output = Self;
+
+    fn sub(self, rhs: MyDuration) -> Self::Output {
+        MyDuration(self.0 - rhs.0)
     }
 }
