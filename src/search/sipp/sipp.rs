@@ -577,9 +577,9 @@ mod tests {
     use chrono::{Duration, Local, TimeZone};
 
     use crate::{
-        search::sipp::sipp::SippConfig, ConstraintSet, Graph, GraphEdgeId, GraphNodeId, Interval,
-        MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld,
-        StateConstraint, Task,
+        search::sipp::sipp::SippConfig, Constraint, ConstraintSet, Graph, GraphEdgeId, GraphNodeId,
+        Interval, MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic, SimpleState,
+        SimpleWorld, Task,
     };
 
     use super::SafeIntervalPathPlanning;
@@ -657,11 +657,13 @@ mod tests {
         ];
 
         let mut constraints = ConstraintSet::default();
-        constraints.add_state_constraint(StateConstraint::new(
+        constraints.add_constraint(Constraint::new_state_constraint(
+            0,
             state.clone(),
             Interval::new(dates[0], dates[1]),
         ));
-        constraints.add_state_constraint(StateConstraint::new(
+        constraints.add_constraint(Constraint::new_state_constraint(
+            0,
             state.clone(),
             Interval::new(dates[2], dates[3]),
         ));
@@ -710,11 +712,13 @@ mod tests {
                     Arc::new(SimpleState(GraphNodeId(l + size * k))),
                     Arc::new(SimpleState(GraphNodeId(k + size * l))),
                 ] {
-                    constraints.add_state_constraint(StateConstraint::new(
+                    constraints.add_constraint(Constraint::new_state_constraint(
+                        0,
                         state.clone(),
                         Interval::new(dates[0], dates[1]),
                     ));
-                    constraints.add_state_constraint(StateConstraint::new(
+                    constraints.add_constraint(Constraint::new_state_constraint(
+                        0,
                         state.clone(),
                         Interval::new(dates[2], dates[3]),
                     ));

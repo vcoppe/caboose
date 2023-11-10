@@ -188,10 +188,13 @@ where
             )),
             config.constraints.clone(),
             self.get_heuristic(config, task),
-            true,
+            false, // we want a solution that reaches an [t,+inf) safe interval
         );
 
         self.solutions = self.sipp.solve_generalized(&config);
+        if !self.solutions.is_empty() {
+            self.solutions = vec![self.solutions.pop().unwrap()];
+        }
 
         self.store_parents();
     }

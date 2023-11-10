@@ -9,9 +9,8 @@ use std::{
 };
 
 use crate::{
-    ActionConstraint, Conflict, Heuristic, LSippConfig, LimitValues, ReverseResumableAStar,
-    SafeIntervalPathPlanningWithLandmarks, SippState, Solution, State, StateConstraint, Task,
-    TransitionSystem,
+    Conflict, Constraint, Heuristic, LSippConfig, LimitValues, ReverseResumableAStar,
+    SafeIntervalPathPlanningWithLandmarks, SippState, Solution, State, Task, TransitionSystem,
 };
 
 /// Implementation of the Conflict-Based Search algorithm.
@@ -76,8 +75,13 @@ where
         self.queue.clear();
 
         if let Some(root) = self.get_root(config) {
-            self.queue.push(Reverse(root));
+            self.enqueue(config, root);
         }
+    }
+
+    fn enqueue(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>, mut node: CbsNode<S, A, C, DC>) {
+        self.compute_conflicts(&mut node, config.tasks.len());
+        self.queue.push(Reverse(node));
     }
 
     fn get_root(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) -> Option<CbsNode<S, A, C, DC>> {
@@ -109,10 +113,7 @@ where
     ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C>>> {
         self.init(config);
 
-        while let Some(Reverse(mut node)) = self.queue.pop() {
-            // Compute conflicts between the solutions of the current node
-            self.compute_conflicts(&mut node, config.tasks.len());
-
+        while let Some(Reverse(node)) = self.queue.pop() {
             if node.conflicts.is_empty() {
                 // No conflicts, we have a solution
                 return Some(
@@ -127,6 +128,9 @@ where
             let conflict = node.conflicts.iter().min().unwrap();
 
             // TODO: create child nodes that solve the conflict differently
+
+            // plan path with first negative constraint
+            // plan path with second negative constraint
         }
 
         None
@@ -137,7 +141,7 @@ where
         let mut conflicts = vec![];
 
         if let Some(parent) = &node.parent {
-            let agent = node.agent.unwrap();
+            let agent = node.constraint.as_ref().unwrap().agent;
 
             // Get conflicts from the parent node that do not involve the given agent
             parent
@@ -156,7 +160,6 @@ where
                 }
 
                 if let Some(conflict) = self.get_conflicts((solutions[agent], solutions[other])) {
-                    // TODO: Set conflict type
                     conflicts.push(Arc::new(conflict));
                 }
             }
@@ -193,6 +196,8 @@ where
         while i < solutions.0.states.len() || j < solutions.1.states.len() {
             // TODO
         }
+
+        // TODO compute conflict type
 
         None
     }
@@ -232,9 +237,8 @@ where
     parent: Option<Arc<Self>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C>>,
     conflicts: Vec<Arc<Conflict<S, A, C, DC>>>,
-    agent: Option<usize>,
-    state_constraint: Option<StateConstraint<S, C>>,
-    action_constraint: Option<ActionConstraint<S, C>>,
+    constraint: Option<Constraint<S, C>>,
+    landmark: Option<Constraint<S, C>>,
 }
 
 impl<S, A, C, DC> Default for CbsNode<S, A, C, DC>
@@ -249,9 +253,8 @@ where
             parent: None,
             solutions: vec![],
             conflicts: vec![],
-            agent: None,
-            state_constraint: None,
-            action_constraint: None,
+            constraint: None,
+            landmark: None,
         }
     }
 }
@@ -267,7 +270,8 @@ where
 
         let mut current = self;
         loop {
-            if let Some(agent) = current.agent {
+            if let Some(constraint) = &current.constraint {
+                let agent = constraint.agent;
                 if solutions[agent].is_none() {
                     solutions[agent] = Some(&current.solutions[0]);
                     found += 1;

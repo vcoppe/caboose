@@ -171,6 +171,8 @@ where
 /// Definition of the different conflict types.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum ConflictType {
+    /// Conflict involving a frozen agent
+    Frozen,
     /// Solving this conflicts delays both agents
     Cardinal,
     /// Solving this conflicts delays one agent
@@ -282,29 +284,60 @@ where
     }
 }
 
-/// Constraint that prevents an agent from visiting the given state
-/// during a given interval.
+/// The types of constraints that can be imposed on agents in a search algorithm.
 #[derive(Debug)]
-pub struct StateConstraint<S, C>
+pub enum ConstraintType {
+    /// Constraint that prevents an agent from visiting the given state during a given interval.
+    State,
+    /// Constraint that prevents an agent from connecting the two given states during a given interval.
+    Action,
+}
+
+/// Defines a constraint that can be imposed on a given agent in a search algorithm.
+#[derive(Debug)]
+pub struct Constraint<S, C>
 where
     S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
+    pub agent: usize,
     pub state: Arc<S>,
+    pub next: Option<Arc<S>>,
     pub interval: Interval<C>,
+    pub type_: ConstraintType,
 }
 
-impl<S, C> StateConstraint<S, C>
+impl<S, C> Constraint<S, C>
 where
     S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn new(state: Arc<S>, interval: Interval<C>) -> Self {
-        Self { state, interval }
+    pub fn new_state_constraint(agent: usize, state: Arc<S>, interval: Interval<C>) -> Self {
+        Self {
+            agent,
+            state,
+            next: None,
+            interval,
+            type_: ConstraintType::State,
+        }
+    }
+    pub fn new_action_constraint(
+        agent: usize,
+        state: Arc<S>,
+        next: Arc<S>,
+        interval: Interval<C>,
+    ) -> Self {
+        Self {
+            agent,
+            state,
+            next: Some(next),
+            interval,
+            type_: ConstraintType::Action,
+        }
     }
 }
 
-impl<S, C> PartialEq for StateConstraint<S, C>
+impl<S, C> PartialEq for Constraint<S, C>
 where
     S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
@@ -314,73 +347,14 @@ where
     }
 }
 
-impl<S, C> Eq for StateConstraint<S, C>
+impl<S, C> Eq for Constraint<S, C>
 where
     S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
 }
 
-impl<S, C> PartialOrd for StateConstraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.interval.partial_cmp(&other.interval)
-    }
-}
-
-impl<S, C> Ord for StateConstraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.interval.cmp(&other.interval)
-    }
-}
-
-/// Constraint that prevents an agent from connecting the two given states
-/// during a given interval.
-pub struct ActionConstraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-    pub from: Arc<S>,
-    pub to: Arc<S>,
-    pub interval: Interval<C>,
-}
-
-impl<S, C> ActionConstraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-    pub fn new(from: Arc<S>, to: Arc<S>, interval: Interval<C>) -> Self {
-        Self { from, to, interval }
-    }
-}
-
-impl<S, C> PartialEq for ActionConstraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.interval == other.interval
-    }
-}
-
-impl<S, C> Eq for ActionConstraint<S, C>
-where
-    S: State,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
-{
-}
-
-impl<S, C> PartialOrd for ActionConstraint<S, C>
+impl<S, C> PartialOrd for Constraint<S, C>
 where
     S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
@@ -390,7 +364,7 @@ where
     }
 }
 
-impl<S, C> Ord for ActionConstraint<S, C>
+impl<S, C> Ord for Constraint<S, C>
 where
     S: State,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
@@ -400,14 +374,14 @@ where
     }
 }
 
-/// Set of constraints that can be used by a search algorithm.
+/// Set of constraints that can be imposed on agents in a search algorithm.
 pub struct ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    state_constraints: HashMap<Arc<S>, BTreeSet<StateConstraint<S, C>>>,
-    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<ActionConstraint<S, C>>>,
+    state_constraints: HashMap<Arc<S>, BTreeSet<Constraint<S, C>>>,
+    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<Constraint<S, C>>>,
 }
 
 impl<S, C> Default for ConstraintSet<S, C>
@@ -428,24 +402,27 @@ where
     S: State + Eq + Hash,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn add_state_constraint(&mut self, constraint: StateConstraint<S, C>) {
-        self.state_constraints
-            .entry(constraint.state.clone())
-            .or_default()
-            .insert(constraint);
+    pub fn add_constraint(&mut self, constraint: Constraint<S, C>) {
+        match constraint.type_ {
+            ConstraintType::State => {
+                self.state_constraints
+                    .entry(constraint.state.clone())
+                    .or_default()
+                    .insert(constraint);
+            }
+            ConstraintType::Action => {
+                self.action_constraints
+                    .entry((
+                        constraint.state.clone(),
+                        constraint.next.as_ref().unwrap().clone(),
+                    ))
+                    .or_default()
+                    .insert(constraint);
+            }
+        }
     }
 
-    pub fn add_action_constraint(&mut self, constraint: ActionConstraint<S, C>) {
-        self.action_constraints
-            .entry((constraint.from.clone(), constraint.to.clone()))
-            .or_default()
-            .insert(constraint);
-    }
-
-    pub fn get_state_constraints(
-        &self,
-        state: &Arc<S>,
-    ) -> Option<&BTreeSet<StateConstraint<S, C>>> {
+    pub fn get_state_constraints(&self, state: &Arc<S>) -> Option<&BTreeSet<Constraint<S, C>>> {
         self.state_constraints.get(state)
     }
 
@@ -453,7 +430,7 @@ where
         &self,
         from: &Arc<S>,
         to: &Arc<S>,
-    ) -> Option<&BTreeSet<ActionConstraint<S, C>>> {
+    ) -> Option<&BTreeSet<Constraint<S, C>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 }
