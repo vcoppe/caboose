@@ -31,8 +31,6 @@ where
         A,
         ReverseResumableAStar<TS, S, A, Time, Duration, H>,
     >,
-    heuristics: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, Time, Duration, H>>>>,
-    pivots: Arc<Vec<Arc<S>>>,
 }
 
 impl<TS, S, A, H> ConflictBasedSearch<TS, S, A, H>
@@ -48,28 +46,10 @@ where
             transition_system,
             queue: BinaryHeap::new(),
             lsipp,
-            heuristics: Default::default(),
-            pivots: Default::default(),
         }
     }
 
     fn init(&mut self, config: &CbsConfig<TS, S, A, H>) {
-        let mut heuristics = vec![];
-        let mut pivots = vec![];
-
-        // Create a ReverseResumableAStar heuristic for each task
-        for (task, heuristic) in config.tasks.iter().zip(config.heuristics.iter()) {
-            heuristics.push(Arc::new(ReverseResumableAStar::new(
-                self.transition_system.clone(),
-                task.clone(),
-                heuristic.clone(),
-            )));
-            pivots.push(task.goal_state.clone());
-        }
-
-        self.heuristics = Arc::new(heuristics);
-        self.pivots = Arc::new(pivots);
-
         self.queue.clear();
 
         if let Some(root) = self.get_root(config) {
@@ -87,8 +67,8 @@ where
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                self.pivots.clone(),
-                self.heuristics.clone(),
+                config.pivots.clone(),
+                config.heuristic_to_pivots.clone(),
             );
             if let Some(solution) = self.lsipp.solve(&config) {
                 root.solutions.push(solution);
@@ -108,7 +88,7 @@ where
 
         while let Some(Reverse(mut node)) = self.queue.pop() {
             // Compute conflicts between the solutions of the current node
-            self.compute_conflicts(&mut node);
+            self.compute_conflicts(&mut node, config.tasks.len());
 
             if node.conflicts.is_empty() {
                 // No conflicts, we have a solution
@@ -130,7 +110,7 @@ where
     }
 
     /// Computes the conflicts between the solutions of the given node.
-    fn compute_conflicts(&self, node: &mut CbsNode<S, A>) {
+    fn compute_conflicts(&self, node: &mut CbsNode<S, A>, n_agents: usize) {
         let mut conflicts = vec![];
 
         if let Some(parent) = &node.parent {
@@ -146,7 +126,7 @@ where
                 });
 
             // Compute conflicts between the given agent and all other agents
-            let solutions = node.get_solutions(self.pivots.len());
+            let solutions = node.get_solutions(n_agents);
             for other in 0..solutions.len() {
                 if other == agent {
                     continue;
@@ -203,9 +183,10 @@ where
     H: Heuristic<TS, S, A, Time, Duration>,
 {
     tasks: Vec<Arc<Task<S, Time>>>,
-    /// A basic heuristic for each task, that will be used inside the
-    /// Reverse Resumable A* algorithm to compute a more precise heuristic.
-    heuristics: Vec<Arc<H>>,
+    /// A set of pivot states.
+    pivots: Arc<Vec<Arc<S>>>,
+    /// A set of heuristics to those pivot states.
+    heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, Time, Duration, H>>>>,
     _phantom: PhantomData<(TS, A)>,
 }
 
