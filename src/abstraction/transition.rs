@@ -2,7 +2,7 @@ use std::{slice, sync::Arc};
 
 use tuple::A2;
 
-use crate::{Constraint, LimitValues};
+use crate::{Constraint, Interval, LimitValues};
 
 /// Definition of a state in a transition system.
 pub trait State {
@@ -31,12 +31,12 @@ where
     fn can_wait_at(&self, state: Arc<S>) -> bool;
 
     /// Returns true if the two moves lead to a collision.
-    fn conflict(&self, moves: A2<&Move<S, A, C, DC>>) -> bool;
+    fn conflict(&self, moves: &A2<Move<S, A, C>>) -> bool;
 
     /// Returns a constraint that ensures that the first move will not collide with the second move anymore.
     /// If the first move is stationary, i.e. from == to, then the constraint should be a state constraint.
     /// Otherwise, the constraint should be an action constraint.
-    fn get_constraint(&self, moves: A2<&Move<S, A, C, DC>>) -> Constraint<S, C>;
+    fn get_constraint(&self, moves: A2<&Move<S, A, C>>) -> Constraint<S, C>;
 }
 
 /// Definition of a callback that can be used to apply actions to a transition system.
@@ -79,11 +79,34 @@ where
 }
 
 /// Definition of a move in a transition system.
-pub struct Move<S, A, C, DC> {
+pub struct Move<S, A, C>
+where
+    C: Ord + LimitValues,
+{
     pub agent: usize,
     pub from: Arc<S>,
     pub to: Arc<S>,
-    pub action: A,
-    pub time: C,
-    pub duration: DC,
+    pub action: Option<A>,
+    pub interval: Interval<C>,
+}
+
+impl<S, A, C> Move<S, A, C>
+where
+    C: Ord + LimitValues,
+{
+    pub fn new(
+        agent: usize,
+        from: Arc<S>,
+        to: Arc<S>,
+        action: Option<A>,
+        interval: Interval<C>,
+    ) -> Self {
+        Self {
+            agent,
+            from,
+            to,
+            action,
+            interval,
+        }
+    }
 }

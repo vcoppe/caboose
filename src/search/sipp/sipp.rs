@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    ConstraintSet, Heuristic, Interval, LimitValues, SearchNode, Solution, State, Task,
+    Action, ConstraintSet, Heuristic, Interval, LimitValues, SearchNode, Solution, State, Task,
     TransitionSystem,
 };
 
@@ -35,14 +35,14 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Copy + Default,
+    DC: PartialOrd + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
     queue: BinaryHeap<Reverse<SearchNode<SippState<S, C>, C, DC>>>,
     distance: HashMap<Arc<SippState<S, C>>, C>,
     closed: HashSet<Arc<SippState<S, C>>>,
-    parent: HashMap<Arc<SippState<S, C>>, (A, Arc<SippState<S, C>>)>,
+    parent: HashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
     _phantom: PhantomData<(A, H)>,
 }
 
@@ -61,7 +61,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Copy + Default,
+    DC: PartialOrd + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm.
@@ -125,7 +125,7 @@ where
     pub fn solve(
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Arc<SippState<S, C>>, A, C>> {
+    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         self.to_generalized(config, true)
             .map(|config| self.solve_generalized(&config).pop())
             .flatten()
@@ -134,7 +134,7 @@ where
     pub fn solve_generalized(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-    ) -> Vec<Solution<Arc<SippState<S, C>>, A, C>> {
+    ) -> Vec<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         self.init(config);
         self.find_paths(config)
             .iter()
@@ -297,8 +297,6 @@ where
                     continue;
                 }
 
-                // TODO: add intermediate state in case of waiting action?
-
                 let successor_state = Arc::new(SippState {
                     safe_interval: *safe_interval,
                     internal_state: successor_state.clone(),
@@ -326,39 +324,16 @@ where
                 };
 
                 if improved {
-                    self.parent
-                        .insert(successor.state.clone(), (*action, current.state.clone()));
+                    self.parent.insert(
+                        successor.state.clone(),
+                        (Action::new(*action, transition_cost), current.state.clone()),
+                    );
                     successors.push(successor);
                 }
             }
         }
 
         successors
-    }
-
-    /// Reconstructs the solution from the given goal search node.
-    fn get_solution(
-        &self,
-        goal: &SearchNode<SippState<S, C>, C, DC>,
-    ) -> Solution<Arc<SippState<S, C>>, A, C> {
-        let mut solution = Solution::default();
-        let mut current = goal.state.clone();
-
-        solution.states.push(current.clone());
-        solution.costs.push(self.distance[&current]);
-
-        while let Some((action, parent)) = self.parent.get(&current) {
-            current = parent.clone();
-            solution.states.push(current.clone());
-            solution.costs.push(self.distance[&current]);
-            solution.actions.push(*action);
-        }
-
-        solution.costs.reverse();
-        solution.actions.reverse();
-        solution.states.reverse();
-
-        solution
     }
 
     /// Returns the safe intervals for the given state, given a set of constraints.
@@ -386,6 +361,43 @@ where
         } else {
             vec![Interval::default()]
         }
+    }
+
+    /// Reconstructs the solution from the given goal search node.
+    fn get_solution(
+        &self,
+        goal: &SearchNode<SippState<S, C>, C, DC>,
+    ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
+        let mut solution = Solution::default();
+        let mut current = goal.state.clone();
+
+        solution.states.push(current.clone());
+        solution.costs.push(self.distance[&current]);
+
+        while let Some((action, parent)) = self.parent.get(&current) {
+            if self.distance[&current] - self.distance[parent] > action.cost {
+                solution.states.push(parent.clone());
+                solution.costs.push(self.distance[&current] - action.cost);
+                solution.actions.push(*action);
+
+                // Insert wait action
+                solution.states.push(parent.clone());
+                solution.costs.push(self.distance[parent]);
+                solution.actions.push(Action::wait(action.cost));
+            } else {
+                solution.states.push(parent.clone());
+                solution.costs.push(self.distance[parent]);
+                solution.actions.push(*action);
+            }
+
+            current = parent.clone();
+        }
+
+        solution.costs.reverse();
+        solution.actions.reverse();
+        solution.states.reverse();
+
+        solution
     }
 }
 

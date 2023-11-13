@@ -12,9 +12,9 @@ use std::{
 use tuple::{A2, T2};
 
 use crate::{
-    Conflict, Constraint, ConstraintSet, ConstraintType, Heuristic, LSippConfig, LandmarkSet,
-    LimitValues, ReverseResumableAStar, SafeIntervalPathPlanningWithLandmarks, SippState, Solution,
-    State, Task, TransitionSystem,
+    Conflict, ConflictType, Constraint, ConstraintSet, ConstraintType, Heuristic, Interval,
+    LSippConfig, LandmarkSet, LimitValues, Move, ReverseResumableAStar,
+    SafeIntervalPathPlanningWithLandmarks, SippState, Solution, State, Task, TransitionSystem,
 };
 
 /// Implementation of the Conflict-Based Search algorithm.
@@ -84,8 +84,9 @@ where
     }
 
     fn enqueue(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>, mut node: CbsNode<S, A, C, DC>) {
-        self.compute_conflicts(&mut node, config.n_agents);
-        self.queue.push(Reverse(Arc::new(node)));
+        if self.compute_conflicts(config, &mut node, config.n_agents) {
+            self.queue.push(Reverse(Arc::new(node)));
+        }
     }
 
     fn get_root(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) -> Option<CbsNode<S, A, C, DC>> {
@@ -115,7 +116,7 @@ where
     pub fn solve(
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C>>> {
+    ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
         self.init(config);
 
         while let Some(Reverse(node)) = self.queue.pop() {
@@ -131,7 +132,7 @@ where
 
             // Find the conflict with the highest priority
             let conflict = node.conflicts.iter().min().unwrap();
-            for successor in self.branch_on(config, &node, conflict) {
+            for successor in self.branch_on(config, &node, conflict).drain(..) {
                 self.enqueue(config, successor);
             }
         }
@@ -148,22 +149,84 @@ where
         // Get the agents involved in the conflict
         let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
 
+        // Create the successor nodes, the new constraints and compute the new solutions
+        let (mut successors, mut solutions, constraints) =
+            self.get_successors(config, node, conflict);
+
+        let mut landmark_added = false;
+        let mut valid_successors = vec![];
+        for (i, (mut successor, solution)) in
+            successors.drain(..).zip(solutions.drain(..)).enumerate()
+        {
+            if let Some(solution) = solution {
+                // Set the real parent of the successor node (minimal clone is used in plan_new_paths)
+                successor.parent = Some(node.clone());
+
+                // Update the total cost of the successor node
+                successor.total_cost = *solution.costs.last().unwrap() + node.total_cost
+                    - config.tasks[agents[i]].initial_cost;
+
+                // Add the solution to the successor node
+                successor.solutions.push(solution);
+
+                // Try to add a landmark to the successor node (given by the negative constraint of the other branch)
+                if !landmark_added && constraints[1 - i].type_ == ConstraintType::Action {
+                    // Transform action constraint in two landmarks
+                    let mut from = (*constraints[1 - i]).clone();
+                    from.type_ = ConstraintType::State;
+                    let mut to = (*constraints[1 - i]).clone();
+                    to.type_ = ConstraintType::State;
+                    to.interval.start = from.interval.start
+                        + (conflict.moves[1 - i].interval.end
+                            - conflict.moves[1 - i].interval.start);
+                    to.interval.end = from.interval.end
+                        + (conflict.moves[1 - i].interval.end
+                            - conflict.moves[1 - i].interval.start);
+                    successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
+                    landmark_added = true;
+                }
+
+                valid_successors.push(successor);
+            }
+        }
+
+        valid_successors
+    }
+
+    /// Computes the successor nodes, the new constraints and the new solutions for the given conflict.
+    fn get_successors(
+        &mut self,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        node: &CbsNode<S, A, C, DC>,
+        conflict: &Conflict<S, A, C, DC>,
+    ) -> (
+        Vec<CbsNode<S, A, C, DC>>,
+        Vec<Option<Solution<Arc<SippState<S, C>>, A, C, DC>>>,
+        A2<Arc<Constraint<S, C>>>,
+    ) {
+        // Get the agents involved in the conflict
+        let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
+
         // Get one constraint for each agent from the transition system to avoid the conflict
         let constraints = T2(
             Arc::new(
                 self.transition_system
-                    .get_constraint(T2(conflict.moves.0.as_ref(), conflict.moves.1.as_ref())),
+                    .get_constraint(T2(&conflict.moves.0, &conflict.moves.1)),
             ),
             Arc::new(
                 self.transition_system
-                    .get_constraint(T2(conflict.moves.1.as_ref(), conflict.moves.0.as_ref())),
+                    .get_constraint(T2(&conflict.moves.1, &conflict.moves.0)),
             ),
         );
 
+        // Get a minimal clone of the current node to allow retrieving the constraints in the successor nodes
+        // without needing to store the current node in an Arc
+        let minimal_clone = Arc::new(node.get_minimal_clone());
+
         // Create a successor nodes for each new constraint
-        let mut successors = vec![
-            CbsNode::new(node.clone(), constraints[0].clone()),
-            CbsNode::new(node.clone(), constraints[1].clone()),
+        let successors = vec![
+            CbsNode::new(minimal_clone.clone(), constraints[0].clone()),
+            CbsNode::new(minimal_clone.clone(), constraints[1].clone()),
         ];
 
         // Get all the constraints for each agent
@@ -173,7 +236,7 @@ where
         );
 
         // Compute a new path for each agent, taking into account the new constraint
-        let mut solutions = vec![
+        let solutions = vec![
             self.lsipp.solve(&LSippConfig::new_with_pivots(
                 config.tasks[agents[0]].clone(),
                 constraint_sets[0].0.clone(),
@@ -190,41 +253,17 @@ where
             )),
         ];
 
-        let mut landmark_added = false;
-        let mut valid_successors = vec![];
-        for (i, (mut successor, solution)) in
-            successors.drain(..).zip(solutions.drain(..)).enumerate()
-        {
-            if let Some(solution) = solution {
-                // Update the total cost of the successor node
-                successor.total_cost = *solution.costs.last().unwrap() + node.total_cost
-                    - config.tasks[agents[i]].initial_cost;
-
-                // Add the solution to the successor node
-                successor.solutions.push(solution);
-
-                // Try to add a landmark to the successor node (given by the negative constraint of the other branch)
-                if !landmark_added && constraints[1 - i].type_ == ConstraintType::Action {
-                    // Transform action constraint in two landmarks
-                    let mut from = (*constraints[1 - i]).clone();
-                    from.type_ = ConstraintType::State;
-                    let mut to = (*constraints[1 - i]).clone();
-                    to.type_ = ConstraintType::State;
-                    to.interval.start = to.interval.start + conflict.moves[1 - i].duration;
-                    to.interval.end = to.interval.end + conflict.moves[1 - i].duration;
-                    successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
-                    landmark_added = true;
-                }
-
-                valid_successors.push(successor);
-            }
-        }
-
-        valid_successors
+        (successors, solutions, constraints)
     }
 
-    /// Computes the conflicts between the solutions of the given node.
-    fn compute_conflicts(&self, node: &mut CbsNode<S, A, C, DC>, n_agents: usize) {
+    /// Computes the conflicts between the solutions of the given node, and returns true if
+    /// all of them can be avoided.
+    fn compute_conflicts(
+        &mut self,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        node: &mut CbsNode<S, A, C, DC>,
+        n_agents: usize,
+    ) -> bool {
         let mut conflicts = vec![];
 
         if let Some(parent) = &node.parent {
@@ -246,7 +285,12 @@ where
                     continue;
                 }
 
-                if let Some(conflict) = self.get_conflicts((solutions[agent], solutions[other])) {
+                if let Some((conflict, avoidable)) =
+                    self.get_conflicts(config, node, T2(agent, other))
+                {
+                    if !avoidable {
+                        return false;
+                    }
                     conflicts.push(Arc::new(conflict));
                 }
             }
@@ -254,9 +298,11 @@ where
             // Root node, compute conflicts between each pair of solutions
             for i in 0..n_agents {
                 for j in i + 1..n_agents {
-                    if let Some(conflict) =
-                        self.get_conflicts((&node.solutions[i], &node.solutions[j]))
+                    if let Some((conflict, avoidable)) = self.get_conflicts(config, node, T2(i, j))
                     {
+                        if !avoidable {
+                            return false;
+                        }
                         conflicts.push(Arc::new(conflict));
                     }
                 }
@@ -265,26 +311,111 @@ where
 
         conflicts
             .drain(..)
-            .for_each(|conflict| node.conflicts.push(conflict))
+            .for_each(|conflict| node.conflicts.push(conflict));
+
+        true
     }
 
-    /// Returns the first conflict between the given solutions, if any.
+    /// Returns the first conflict between the given solutions, if any, and whether it can be avoided.
     fn get_conflicts(
-        &self,
-        solutions: (
-            &Solution<Arc<SippState<S, C>>, A, C>,
-            &Solution<Arc<SippState<S, C>>, A, C>,
-        ),
-    ) -> Option<Conflict<S, A, C, DC>> {
-        // Iterate through both solutions and find moves overlapping in C
-        let mut i = 0;
-        let mut j = 0;
+        &mut self,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        node: &CbsNode<S, A, C, DC>,
+        agents: A2<usize>,
+    ) -> Option<(Conflict<S, A, C, DC>, bool)> {
+        let mut conflict = None;
 
-        while i < solutions.0.states.len() || j < solutions.1.states.len() {
-            // TODO
+        // Iterate through both solutions and find moves overlapping in C
+        let mut index = T2(0, 0);
+        let mut intervals = T2(Interval::default(), Interval::default());
+        while index[0] < node.solutions[agents[0]].states.len()
+            || index[1] < node.solutions[agents[1]].states.len()
+        {
+            // Compute the interval of each move
+            for k in 0..=1 {
+                intervals[k].start = node.solutions[agents[k]].costs[index[k]];
+                intervals[k].end = if index[k] + 1 < node.solutions[agents[index[k]]].states.len() {
+                    node.solutions[agents[index[k]]].costs[index[k] + 1]
+                } else {
+                    C::max_value()
+                };
+            }
+
+            // Check if the intervals overlap
+            if intervals[0].overlaps(&intervals[1]) {
+                // Check if the moves lead to a conflict
+                let moves = T2(
+                    Move::new(
+                        agents[0],
+                        node.solutions[agents[0]].states[index[0]]
+                            .internal_state
+                            .clone(),
+                        node.solutions[agents[0]].states[index[0] + 1]
+                            .internal_state
+                            .clone(),
+                        node.solutions[agents[0]].actions[index[0]].action,
+                        intervals[0].clone(),
+                    ),
+                    Move::new(
+                        agents[1],
+                        node.solutions[agents[1]].states[index[1]]
+                            .internal_state
+                            .clone(),
+                        node.solutions[agents[1]].states[index[1] + 1]
+                            .internal_state
+                            .clone(),
+                        node.solutions[agents[1]].actions[index[1]].action,
+                        intervals[1].clone(),
+                    ),
+                );
+
+                if self.transition_system.conflict(&moves) {
+                    conflict = Some(Conflict::new(moves));
+                    break;
+                }
+            }
+
+            if intervals[0].end == intervals[1].end {
+                index[0] += 1;
+                index[1] += 1;
+            } else if intervals[0].end < intervals[1].end {
+                index[0] += 1;
+            } else {
+                index[1] += 1;
+            }
         }
 
-        // TODO compute conflict type
+        if let Some(mut conflict) = conflict {
+            // Determine conflict type by trying to avoid it
+            let (_, solutions, _) = self.get_successors(config, node, &conflict);
+
+            if let (None, None) = (&solutions[0], &solutions[1]) {
+                return Some((conflict, false));
+            } else if let (Some(solution), None) = (&solutions[0], &solutions[1]) {
+                conflict.overcost = *node.solutions[agents[0]].costs.last().unwrap()
+                    - *solution.costs.last().unwrap();
+                conflict.type_ = ConflictType::Cardinal;
+            } else if let (None, Some(solution)) = (&solutions[0], &solutions[1]) {
+                conflict.overcost = *node.solutions[agents[1]].costs.last().unwrap()
+                    - *solution.costs.last().unwrap();
+                conflict.type_ = ConflictType::Cardinal;
+            } else if let (Some(solution1), Some(solution2)) = (&solutions[0], &solutions[1]) {
+                let overcost1 = *node.solutions[agents[0]].costs.last().unwrap()
+                    - *solution1.costs.last().unwrap();
+                let overcost2 = *node.solutions[agents[1]].costs.last().unwrap()
+                    - *solution2.costs.last().unwrap();
+                conflict.overcost = overcost1.min(overcost2);
+                if overcost1 > DC::default() && overcost2 > DC::default() {
+                    conflict.type_ = ConflictType::Cardinal;
+                } else if overcost1 > DC::default() || overcost2 > DC::default() {
+                    conflict.type_ = ConflictType::SemiCardinal;
+                } else {
+                    conflict.type_ = ConflictType::NonCardinal;
+                }
+            }
+
+            return Some((conflict, true));
+        }
 
         None
     }
@@ -354,7 +485,7 @@ where
 {
     total_cost: DC,
     parent: Option<Arc<Self>>,
-    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C>>,
+    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
     conflicts: Vec<Arc<Conflict<S, A, C, DC>>>,
     constraint: Option<Arc<Constraint<S, C>>>,
     landmark: Option<A2<Arc<Constraint<S, C>>>>,
@@ -395,6 +526,17 @@ where
         }
     }
 
+    pub fn get_minimal_clone(&self) -> Self {
+        Self {
+            total_cost: self.total_cost,
+            parent: self.parent.clone(),
+            solutions: vec![],
+            conflicts: vec![],
+            constraint: self.constraint.clone(),
+            landmark: self.landmark.clone(),
+        }
+    }
+
     pub fn get_constraints(
         &self,
         agent: usize,
@@ -428,7 +570,7 @@ where
         (Arc::new(constraints), Arc::new(landmarks))
     }
 
-    pub fn get_solutions(&self, n_agents: usize) -> Vec<&Solution<Arc<SippState<S, C>>, A, C>> {
+    pub fn get_solutions(&self, n_agents: usize) -> Vec<&Solution<Arc<SippState<S, C>>, A, C, DC>> {
         let mut found = 0;
         let mut solutions = vec![None; n_agents];
 

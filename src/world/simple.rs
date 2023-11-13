@@ -84,13 +84,13 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyDuration> for SimpleWo
         true
     }
 
-    fn conflict(&self, _moves: A2<&Move<SimpleState, GraphEdgeId, MyTime, MyDuration>>) -> bool {
+    fn conflict(&self, _moves: &A2<Move<SimpleState, GraphEdgeId, MyTime>>) -> bool {
         todo!("Implement conflict detection for SimpleWorld")
     }
 
     fn get_constraint(
         &self,
-        _moves: A2<&Move<SimpleState, GraphEdgeId, MyTime, MyDuration>>,
+        _moves: A2<&Move<SimpleState, GraphEdgeId, MyTime>>,
     ) -> Constraint<SimpleState, MyTime> {
         todo!("Implement constraint generation for SimpleWorld")
     }

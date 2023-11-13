@@ -11,18 +11,38 @@ use tuple::A2;
 
 use crate::{Move, State, Task, TransitionSystem};
 
+/// Wrapper around an action that also contains the cost of the action.
+#[derive(Debug, Clone, Copy)]
+pub struct Action<A, DC> {
+    pub action: Option<A>,
+    pub cost: DC,
+}
+
+impl<A, DC> Action<A, DC> {
+    pub fn new(action: A, cost: DC) -> Self {
+        Self {
+            action: Some(action),
+            cost,
+        }
+    }
+
+    pub fn wait(cost: DC) -> Self {
+        Self { action: None, cost }
+    }
+}
+
 /// Description of a solution to a search problem
 #[derive(Debug, Clone)]
-pub struct Solution<S, A, C>
+pub struct Solution<S, A, C, DC>
 where
     C: Default,
 {
     pub states: Vec<S>,
     pub costs: Vec<C>,
-    pub actions: Vec<A>,
+    pub actions: Vec<Action<A, DC>>,
 }
 
-impl<S, A, C> Default for Solution<S, A, C>
+impl<S, A, C, DC> Default for Solution<S, A, C, DC>
 where
     C: Default,
 {
@@ -186,63 +206,104 @@ pub enum ConflictType {
 /// Definition of a conflict between two moves.
 pub struct Conflict<S, A, C, DC>
 where
-    C: Ord,
+    C: Ord + LimitValues,
+    DC: Ord + Default,
 {
-    pub moves: A2<Arc<Move<S, A, C, DC>>>,
+    pub moves: A2<Move<S, A, C>>,
     pub type_: ConflictType,
+    pub overcost: DC,
 }
 
-// TODO: also take into account the overcost of solving the conflict
 impl<S, A, C, DC> Conflict<S, A, C, DC>
 where
-    C: Ord,
+    C: Ord + LimitValues,
+    DC: Ord + Default,
 {
-    pub fn new(moves: A2<Arc<Move<S, A, C, DC>>>, type_: ConflictType) -> Self {
-        Self { moves, type_ }
+    pub fn new(moves: A2<Move<S, A, C>>) -> Self {
+        Self {
+            moves,
+            type_: ConflictType::NonCardinal,
+            overcost: DC::default(),
+        }
     }
 }
 
 impl<S, A, C, DC> PartialEq for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy,
+    C: Ord + Copy + LimitValues,
+    DC: Ord + Default,
 {
     fn eq(&self, other: &Self) -> bool {
         self.type_ == other.type_
-            && self.moves.0.time.min(self.moves.1.time)
-                == other.moves.0.time.min(other.moves.1.time)
+            && self.overcost == other.overcost
+            && self.moves.0.interval.start.min(self.moves.1.interval.start)
+                == other
+                    .moves
+                    .0
+                    .interval
+                    .start
+                    .min(other.moves.1.interval.start)
     }
 }
 
-impl<S, A, C, DC> Eq for Conflict<S, A, C, DC> where C: Ord + Copy {}
+impl<S, A, C, DC> Eq for Conflict<S, A, C, DC>
+where
+    C: Ord + Copy + LimitValues,
+    DC: Ord + Default,
+{
+}
 
 impl<S, A, C, DC> PartialOrd for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy,
+    C: Ord + Copy + LimitValues,
+    DC: Ord + Default,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.type_ == other.type_ {
-            self.moves
-                .0
-                .time
-                .min(self.moves.1.time)
-                .partial_cmp(&other.moves.0.time.min(other.moves.1.time))
-        } else {
-            self.type_.partial_cmp(&other.type_)
-        }
+        self.type_
+            .partial_cmp(&other.type_)
+            .and_then(|_| other.overcost.partial_cmp(&self.overcost))
+            .and_then(|_| {
+                self.moves
+                    .0
+                    .interval
+                    .start
+                    .min(self.moves.1.interval.start)
+                    .partial_cmp(
+                        &&other
+                            .moves
+                            .0
+                            .interval
+                            .start
+                            .min(other.moves.1.interval.start),
+                    )
+            })
     }
 }
 
 impl<S, A, C, DC> Ord for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy,
+    C: Ord + Copy + LimitValues,
+    DC: Ord + Default,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.type_ == other.type_ {
-            self.moves
-                .0
-                .time
-                .min(self.moves.1.time)
-                .cmp(&other.moves.0.time.min(other.moves.1.time))
+            if self.overcost == other.overcost {
+                self.moves
+                    .0
+                    .interval
+                    .start
+                    .min(self.moves.1.interval.start)
+                    .cmp(
+                        &&other
+                            .moves
+                            .0
+                            .interval
+                            .start
+                            .min(other.moves.1.interval.start),
+                    )
+            } else {
+                other.overcost.cmp(&self.overcost)
+            }
         } else {
             self.type_.cmp(&other.type_)
         }
@@ -280,6 +341,10 @@ where
 {
     pub fn new(start: C, end: C) -> Self {
         Self { start, end }
+    }
+
+    pub fn overlaps(&self, other: &Self) -> bool {
+        self.start <= other.end && other.start <= self.end
     }
 }
 

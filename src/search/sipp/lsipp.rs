@@ -8,9 +8,9 @@ use std::{
 };
 
 use crate::{
-    ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, LandmarkSet,
-    LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippTask, Solution, State, Task,
-    TransitionSystem,
+    Action, ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval,
+    LandmarkSet, LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippTask, Solution,
+    State, Task, TransitionSystem,
 };
 
 /// Implementation of Safe Interval Path Planning algorithm that supports landmarks
@@ -34,8 +34,8 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
-    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C>>,
-    parent: HashMap<(Arc<SippState<S, C>>, C), (A, Arc<SippState<S, C>>, C)>,
+    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    parent: HashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
 }
 
 impl<TS, S, A, C, DC, H> SafeIntervalPathPlanningWithLandmarks<TS, S, A, C, DC, H>
@@ -74,7 +74,7 @@ where
     pub fn solve(
         &mut self,
         config: &LSippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Arc<SippState<S, C>>, A, C>> {
+    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         self.init();
 
         if config.landmarks.is_empty() {
@@ -216,7 +216,7 @@ where
     }
 
     /// Returns the solution to the given task, if any.
-    fn get_solution(&self) -> Option<Solution<Arc<SippState<S, C>>, A, C>> {
+    fn get_solution(&self) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         if self.solutions.is_empty() {
             return None;
         }
