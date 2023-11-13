@@ -4,7 +4,7 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
-    ops::{Add, Sub},
+    ops::{Add, Div, Sub},
     sync::Arc,
     vec,
 };
@@ -23,7 +23,8 @@ where
     TS: TransitionSystem<S, A, C, DC>,
     S: Debug + State + Eq + Hash + Copy,
     A: Debug + Copy,
-    C: Hash
+    C: Debug
+        + Hash
         + Eq
         + PartialOrd
         + Ord
@@ -33,7 +34,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Ord + Sub<DC, Output = DC> + Copy + Default,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<i32, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
@@ -53,7 +54,8 @@ where
     TS: TransitionSystem<S, A, C, DC>,
     S: Debug + State + Eq + Hash + Copy,
     A: Debug + Copy,
-    C: Hash
+    C: Debug
+        + Hash
         + Eq
         + PartialOrd
         + Ord
@@ -63,7 +65,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Ord + Sub<DC, Output = DC> + Copy + Default,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<i32, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
@@ -120,6 +122,13 @@ where
         self.init(config);
 
         while let Some(Reverse(node)) = self.queue.pop() {
+            dbg!(
+                node.total_cost,
+                &node.constraint,
+                &node.landmark,
+                &node.conflicts
+            );
+
             if node.conflicts.is_empty() {
                 // No conflicts, we have a solution
                 return Some(
@@ -172,16 +181,23 @@ where
                 // Try to add a landmark to the successor node (given by the negative constraint of the other branch)
                 if !landmark_added && constraints[1 - i].type_ == ConstraintType::Action {
                     // Transform action constraint in two landmarks
-                    let mut from = (*constraints[1 - i]).clone();
-                    from.type_ = ConstraintType::State;
-                    let mut to = (*constraints[1 - i]).clone();
-                    to.type_ = ConstraintType::State;
-                    to.interval.start = from.interval.start
-                        + (conflict.moves[1 - i].interval.end
-                            - conflict.moves[1 - i].interval.start);
-                    to.interval.end = from.interval.end
-                        + (conflict.moves[1 - i].interval.end
-                            - conflict.moves[1 - i].interval.start);
+                    let from = Constraint::new_state_constraint(
+                        agents[1 - i],
+                        constraints[1 - i].state.clone(),
+                        constraints[1 - i].interval,
+                    );
+                    let to = Constraint::new_state_constraint(
+                        agents[1 - i],
+                        constraints[1 - i].next.as_ref().unwrap().clone(),
+                        Interval::new(
+                            from.interval.start
+                                + (conflict.moves[1 - i].interval.end
+                                    - conflict.moves[1 - i].interval.start),
+                            from.interval.end
+                                + (conflict.moves[1 - i].interval.end
+                                    - conflict.moves[1 - i].interval.start),
+                        ),
+                    );
                     successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
                     landmark_added = true;
                 }
@@ -209,14 +225,8 @@ where
 
         // Get one constraint for each agent from the transition system to avoid the conflict
         let constraints = T2(
-            Arc::new(
-                self.transition_system
-                    .get_constraint(T2(&conflict.moves.0, &conflict.moves.1)),
-            ),
-            Arc::new(
-                self.transition_system
-                    .get_constraint(T2(&conflict.moves.1, &conflict.moves.0)),
-            ),
+            Arc::new(self.get_constraint(config, T2(&conflict.moves.0, &conflict.moves.1))),
+            Arc::new(self.get_constraint(config, T2(&conflict.moves.1, &conflict.moves.0))),
         );
 
         // Get a minimal clone of the current node to allow retrieving the constraints in the successor nodes
@@ -256,6 +266,46 @@ where
         (successors, solutions, constraints)
     }
 
+    /// Returns a constraint that ensures that the first move will not collide with the second move anymore.
+    /// If the first move is stationary, i.e. from == to, then the constraint is a state constraint.
+    /// Otherwise, the constraint is an action constraint.
+    fn get_constraint(
+        &self,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        moves: A2<&Move<S, A, C>>,
+    ) -> Constraint<S, C> {
+        let mut lo = moves[0].interval.start;
+        let mut hi = moves[0].interval.end.max(moves[1].interval.end);
+
+        let mut delayed_move = moves[0].clone();
+
+        while hi - lo > config.collision_precision {
+            let mid = lo + (hi - lo) / 2;
+
+            delayed_move.interval.start = mid;
+            delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
+
+            if self.transition_system.conflict(T2(&delayed_move, moves[1])) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        let interval = Interval::new(moves[0].interval.start, hi);
+
+        if moves[0].action.is_some() {
+            Constraint::new_action_constraint(
+                moves[0].agent,
+                moves[0].from.clone(),
+                moves[0].to.clone(),
+                interval,
+            )
+        } else {
+            Constraint::new_state_constraint(moves[0].agent, moves[0].from.clone(), interval)
+        }
+    }
+
     /// Computes the conflicts between the solutions of the given node, and returns true if
     /// all of them can be avoided.
     fn compute_conflicts(
@@ -264,8 +314,9 @@ where
         node: &mut CbsNode<S, A, C, DC>,
         n_agents: usize,
     ) -> bool {
-        let mut conflicts = vec![];
+        let solutions = node.get_solutions(n_agents);
 
+        let mut conflicts = vec![];
         if let Some(parent) = &node.parent {
             let agent = node.constraint.as_ref().unwrap().agent;
 
@@ -279,14 +330,13 @@ where
                 });
 
             // Compute conflicts between the given agent and all other agents
-            let solutions = node.get_solutions(n_agents);
             for other in 0..n_agents {
                 if other == agent {
                     continue;
                 }
 
                 if let Some((conflict, avoidable)) =
-                    self.get_conflicts(config, node, T2(agent, other))
+                    self.get_conflicts(config, node, &solutions, T2(agent, other))
                 {
                     if !avoidable {
                         return false;
@@ -298,7 +348,8 @@ where
             // Root node, compute conflicts between each pair of solutions
             for i in 0..n_agents {
                 for j in i + 1..n_agents {
-                    if let Some((conflict, avoidable)) = self.get_conflicts(config, node, T2(i, j))
+                    if let Some((conflict, avoidable)) =
+                        self.get_conflicts(config, node, &solutions, T2(i, j))
                     {
                         if !avoidable {
                             return false;
@@ -321,6 +372,7 @@ where
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &CbsNode<S, A, C, DC>,
+        solutions: &Vec<&Solution<Arc<SippState<S, C>>, A, C, DC>>,
         agents: A2<usize>,
     ) -> Option<(Conflict<S, A, C, DC>, bool)> {
         let mut conflict = None;
@@ -328,14 +380,12 @@ where
         // Iterate through both solutions and find moves overlapping in C
         let mut index = T2(0, 0);
         let mut intervals = T2(Interval::default(), Interval::default());
-        while index[0] < node.solutions[agents[0]].states.len()
-            || index[1] < node.solutions[agents[1]].states.len()
-        {
+        loop {
             // Compute the interval of each move
             for k in 0..=1 {
-                intervals[k].start = node.solutions[agents[k]].costs[index[k]];
-                intervals[k].end = if index[k] + 1 < node.solutions[agents[index[k]]].states.len() {
-                    node.solutions[agents[index[k]]].costs[index[k] + 1]
+                intervals[k].start = solutions[agents[k]].costs[index[k]];
+                intervals[k].end = if index[k] < solutions[agents[k]].actions.len() {
+                    solutions[agents[k]].costs[index[k] + 1]
                 } else {
                     C::max_value()
                 };
@@ -347,63 +397,77 @@ where
                 let moves = T2(
                     Move::new(
                         agents[0],
-                        node.solutions[agents[0]].states[index[0]]
-                            .internal_state
-                            .clone(),
-                        node.solutions[agents[0]].states[index[0] + 1]
-                            .internal_state
-                            .clone(),
-                        node.solutions[agents[0]].actions[index[0]].action,
+                        solutions[agents[0]].states[index[0]].internal_state.clone(),
+                        solutions[agents[0]]
+                            .states
+                            .get(index[0] + 1)
+                            .map(|s| s.internal_state.clone())
+                            .unwrap_or(
+                                solutions[agents[0]].states[index[0]].internal_state.clone(),
+                            ),
+                        solutions[agents[0]]
+                            .actions
+                            .get(index[0])
+                            .map(|a| a.action)
+                            .flatten(),
                         intervals[0].clone(),
                     ),
                     Move::new(
                         agents[1],
-                        node.solutions[agents[1]].states[index[1]]
-                            .internal_state
-                            .clone(),
-                        node.solutions[agents[1]].states[index[1] + 1]
-                            .internal_state
-                            .clone(),
-                        node.solutions[agents[1]].actions[index[1]].action,
+                        solutions[agents[1]].states[index[1]].internal_state.clone(),
+                        solutions[agents[1]]
+                            .states
+                            .get(index[1] + 1)
+                            .map(|s| s.internal_state.clone())
+                            .unwrap_or(
+                                solutions[agents[1]].states[index[1]].internal_state.clone(),
+                            ),
+                        solutions[agents[1]]
+                            .actions
+                            .get(index[1])
+                            .map(|a| a.action)
+                            .flatten(),
                         intervals[1].clone(),
                     ),
                 );
 
-                if self.transition_system.conflict(&moves) {
+                if self.transition_system.conflict(T2(&moves.0, &moves.1)) {
                     conflict = Some(Conflict::new(moves));
                     break;
                 }
             }
 
-            if intervals[0].end == intervals[1].end {
+            if index[0] < solutions[agents[0]].actions.len() && intervals[0].end <= intervals[1].end
+            {
                 index[0] += 1;
+            } else if index[1] < solutions[agents[1]].actions.len() {
                 index[1] += 1;
-            } else if intervals[0].end < intervals[1].end {
-                index[0] += 1;
             } else {
-                index[1] += 1;
+                break;
             }
         }
 
         if let Some(mut conflict) = conflict {
             // Determine conflict type by trying to avoid it
-            let (_, solutions, _) = self.get_successors(config, node, &conflict);
+            let (_, new_solutions, _) = self.get_successors(config, node, &conflict);
 
-            if let (None, None) = (&solutions[0], &solutions[1]) {
+            if let (None, None) = (&new_solutions[0], &new_solutions[1]) {
                 return Some((conflict, false));
-            } else if let (Some(solution), None) = (&solutions[0], &solutions[1]) {
-                conflict.overcost = *node.solutions[agents[0]].costs.last().unwrap()
-                    - *solution.costs.last().unwrap();
+            } else if let (Some(solution), None) = (&new_solutions[0], &new_solutions[1]) {
+                conflict.overcost =
+                    *solution.costs.last().unwrap() - *solutions[agents[0]].costs.last().unwrap();
                 conflict.type_ = ConflictType::Cardinal;
-            } else if let (None, Some(solution)) = (&solutions[0], &solutions[1]) {
-                conflict.overcost = *node.solutions[agents[1]].costs.last().unwrap()
-                    - *solution.costs.last().unwrap();
+            } else if let (None, Some(solution)) = (&new_solutions[0], &new_solutions[1]) {
+                conflict.overcost =
+                    *solution.costs.last().unwrap() - *solutions[agents[1]].costs.last().unwrap();
                 conflict.type_ = ConflictType::Cardinal;
-            } else if let (Some(solution1), Some(solution2)) = (&solutions[0], &solutions[1]) {
-                let overcost1 = *node.solutions[agents[0]].costs.last().unwrap()
-                    - *solution1.costs.last().unwrap();
-                let overcost2 = *node.solutions[agents[1]].costs.last().unwrap()
-                    - *solution2.costs.last().unwrap();
+            } else if let (Some(solution1), Some(solution2)) =
+                (&new_solutions[0], &new_solutions[1])
+            {
+                let overcost1 =
+                    *solution1.costs.last().unwrap() - *solutions[agents[0]].costs.last().unwrap();
+                let overcost2 =
+                    *solution2.costs.last().unwrap() - *solutions[agents[1]].costs.last().unwrap();
                 conflict.overcost = overcost1.min(overcost2);
                 if overcost1 > DC::default() && overcost2 > DC::default() {
                     conflict.type_ = ConflictType::Cardinal;
@@ -443,6 +507,7 @@ where
     pivots: Arc<Vec<Arc<S>>>,
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
+    collision_precision: DC,
     _phantom: PhantomData<(TS, A)>,
 }
 
@@ -465,18 +530,21 @@ where
         tasks: Vec<Arc<Task<S, C>>>,
         pivots: Arc<Vec<Arc<S>>>,
         heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
+        collision_precision: DC,
     ) -> Self {
         Self {
             n_agents: tasks.len(),
             tasks,
             pivots,
             heuristic_to_pivots,
+            collision_precision,
             _phantom: PhantomData::default(),
         }
     }
 }
 
 /// A node in the Conflict-Based Search tree.
+#[derive(Debug)]
 struct CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
@@ -645,5 +713,105 @@ where
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.total_cost.cmp(&other.total_cost)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use chrono::{Duration, Local, TimeZone};
+
+    use crate::{
+        Graph, GraphNodeId, MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic,
+        SimpleState, SimpleWorld, Task,
+    };
+
+    use super::{CbsConfig, ConflictBasedSearch};
+
+    fn simple_graph(size: usize) -> Arc<Graph> {
+        let mut graph = Graph::new();
+        for x in 0..size {
+            for y in 0..size {
+                graph.add_node((x as f64, y as f64), 1.0);
+            }
+        }
+        for x in 0..size {
+            for y in 0..size {
+                let node_id = GraphNodeId(x + y * size);
+                if x > 0 {
+                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0, 1.0);
+                }
+                if y > 0 {
+                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0, 1.0);
+                }
+                if x < size - 1 {
+                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0, 1.0);
+                }
+                if y < size - 1 {
+                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0, 1.0);
+                }
+            }
+        }
+        Arc::new(graph)
+    }
+
+    #[test]
+    fn test_simple() {
+        let size = 10;
+        let graph = simple_graph(size);
+        let transition_system = Arc::new(SimpleWorld::new(graph));
+
+        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
+
+        let tasks = vec![
+            Arc::new(Task::new(
+                Arc::new(SimpleState(GraphNodeId(0))),
+                Arc::new(SimpleState(GraphNodeId(9))),
+                initial_time,
+            )),
+            Arc::new(Task::new(
+                Arc::new(SimpleState(GraphNodeId(9))),
+                Arc::new(SimpleState(GraphNodeId(0))),
+                initial_time,
+            )),
+        ];
+
+        let pivots = Arc::new(vec![
+            Arc::new(SimpleState(GraphNodeId(0))),
+            Arc::new(SimpleState(GraphNodeId(9))),
+        ]);
+
+        let heuristic_to_pivots = Arc::new(vec![
+            Arc::new(ReverseResumableAStar::new(
+                transition_system.clone(),
+                tasks[0].clone(),
+                Arc::new(SimpleHeuristic::new(
+                    transition_system.clone(),
+                    tasks[0].clone(),
+                )),
+            )),
+            Arc::new(ReverseResumableAStar::new(
+                transition_system.clone(),
+                tasks[1].clone(),
+                Arc::new(SimpleHeuristic::new(
+                    transition_system.clone(),
+                    tasks[1].clone(),
+                )),
+            )),
+        ]);
+
+        let config = CbsConfig::new(
+            tasks,
+            pivots,
+            heuristic_to_pivots,
+            MyDuration(Duration::milliseconds(100)),
+        );
+
+        let mut solver = ConflictBasedSearch::new(transition_system.clone());
+
+        let solution = solver.solve(&config);
+
+        dbg!(solution);
     }
 }

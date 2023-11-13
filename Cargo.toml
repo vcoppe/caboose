@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.31"
+ncollide2d = "0.33.0"
 tuple = "0.5.1"

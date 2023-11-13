@@ -2,7 +2,7 @@ use std::{slice, sync::Arc};
 
 use tuple::A2;
 
-use crate::{Constraint, Interval, LimitValues};
+use crate::{Interval, LimitValues};
 
 /// Definition of a state in a transition system.
 pub trait State {
@@ -31,12 +31,7 @@ where
     fn can_wait_at(&self, state: Arc<S>) -> bool;
 
     /// Returns true if the two moves lead to a collision.
-    fn conflict(&self, moves: &A2<Move<S, A, C>>) -> bool;
-
-    /// Returns a constraint that ensures that the first move will not collide with the second move anymore.
-    /// If the first move is stationary, i.e. from == to, then the constraint should be a state constraint.
-    /// Otherwise, the constraint should be an action constraint.
-    fn get_constraint(&self, moves: A2<&Move<S, A, C>>) -> Constraint<S, C>;
+    fn conflict(&self, moves: A2<&Move<S, A, C>>) -> bool;
 }
 
 /// Definition of a callback that can be used to apply actions to a transition system.
@@ -79,6 +74,7 @@ where
 }
 
 /// Definition of a move in a transition system.
+#[derive(Debug, Clone)]
 pub struct Move<S, A, C>
 where
     C: Ord + LimitValues,

@@ -2,7 +2,7 @@
 pub struct GraphNodeId(pub usize);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GraphEdgeId(usize);
+pub struct GraphEdgeId(pub usize);
 
 pub struct GraphNode {
     pub position: (f64, f64),

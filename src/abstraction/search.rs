@@ -204,6 +204,7 @@ pub enum ConflictType {
 }
 
 /// Definition of a conflict between two moves.
+#[derive(Debug)]
 pub struct Conflict<S, A, C, DC>
 where
     C: Ord + LimitValues,
