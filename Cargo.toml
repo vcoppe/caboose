@@ -9,3 +9,7 @@ edition = "2021"
 chrono = "0.4.31"
 ncollide2d = "0.33.0"
 tuple = "0.5.1"
+
+[dev-dependencies]
+nannou = "0.18.1"
+nannou_egui = "0.5.0"

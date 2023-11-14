@@ -244,7 +244,7 @@ where
             {
                 let mut successor_cost = current.cost + transition_cost;
 
-                if successor_cost > safe_interval.end {
+                if successor_cost >= safe_interval.end {
                     // Cannot reach this safe interval in time
                     continue;
                 }

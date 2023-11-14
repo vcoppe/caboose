@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Implementation of the Conflict-Based Search algorithm.
-struct ConflictBasedSearch<TS, S, A, C, DC, H>
+pub struct ConflictBasedSearch<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: Debug + State + Eq + Hash + Copy,
@@ -77,7 +77,7 @@ where
         }
     }
 
-    fn init(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) {
+    pub fn init(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) {
         self.queue.clear();
 
         if let Some(root) = self.get_root(config) {
@@ -122,13 +122,6 @@ where
         self.init(config);
 
         while let Some(Reverse(node)) = self.queue.pop() {
-            dbg!(
-                node.total_cost,
-                &node.constraint,
-                &node.landmark,
-                &node.conflicts
-            );
-
             if node.conflicts.is_empty() {
                 // No conflicts, we have a solution
                 return Some(
@@ -147,6 +140,25 @@ where
         }
 
         None
+    }
+
+    pub fn solve_iter(
+        &mut self,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+    ) -> Option<Arc<CbsNode<S, A, C, DC>>> {
+        if let Some(Reverse(node)) = self.queue.pop() {
+            if !node.conflicts.is_empty() {
+                // Find the conflict with the highest priority
+                let conflict = node.conflicts.iter().min().unwrap();
+                for successor in self.branch_on(config, &node, conflict).drain(..) {
+                    self.enqueue(config, successor);
+                }
+            }
+
+            Some(node)
+        } else {
+            None
+        }
     }
 
     fn branch_on(
@@ -198,8 +210,15 @@ where
                                     - conflict.moves[1 - i].interval.start),
                         ),
                     );
-                    successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
-                    landmark_added = true;
+
+                    if !successor.contains_landmark(T2(&from, &to)) {
+                        successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
+                        landmark_added = true;
+                    }
+                }
+
+                if successor.conflicting_constraints(agents[i]) {
+                    continue;
                 }
 
                 valid_successors.push(successor);
@@ -278,17 +297,25 @@ where
         let mut hi = moves[0].interval.end.max(moves[1].interval.end);
 
         let mut delayed_move = moves[0].clone();
+        delayed_move.interval.start = hi;
+        delayed_move.interval.end = if hi == C::max_value() {
+            hi
+        } else {
+            hi + (moves[0].interval.end - moves[0].interval.start)
+        };
 
-        while hi - lo > config.collision_precision {
-            let mid = lo + (hi - lo) / 2;
+        if !self.transition_system.conflict(T2(&delayed_move, moves[1])) {
+            while hi - lo > config.collision_precision {
+                let mid = lo + (hi - lo) / 2;
 
-            delayed_move.interval.start = mid;
-            delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
+                delayed_move.interval.start = mid;
+                delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
 
-            if self.transition_system.conflict(T2(&delayed_move, moves[1])) {
-                lo = mid;
-            } else {
-                hi = mid;
+                if self.transition_system.conflict(T2(&delayed_move, moves[1])) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
             }
         }
 
@@ -486,7 +513,7 @@ where
 }
 
 /// Input configuration for the Conflict-Based Search algorithm.
-struct CbsConfig<TS, S, A, C, DC, H>
+pub struct CbsConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Eq + Hash,
@@ -501,8 +528,8 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    n_agents: usize,
-    tasks: Vec<Arc<Task<S, C>>>,
+    pub n_agents: usize,
+    pub tasks: Vec<Arc<Task<S, C>>>,
     /// A set of pivot states.
     pivots: Arc<Vec<Arc<S>>>,
     /// A set of heuristics to those pivot states.
@@ -545,16 +572,16 @@ where
 
 /// A node in the Conflict-Based Search tree.
 #[derive(Debug)]
-struct CbsNode<S, A, C, DC>
+pub struct CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     total_cost: DC,
     parent: Option<Arc<Self>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    conflicts: Vec<Arc<Conflict<S, A, C, DC>>>,
+    pub conflicts: Vec<Arc<Conflict<S, A, C, DC>>>,
     constraint: Option<Arc<Constraint<S, C>>>,
     landmark: Option<A2<Arc<Constraint<S, C>>>>,
 }
@@ -562,7 +589,7 @@ where
 impl<S, A, C, DC> Default for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn default() -> Self {
@@ -580,7 +607,7 @@ where
 impl<S, A, C, DC> CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     pub fn new(parent: Arc<Self>, constraint: Arc<Constraint<S, C>>) -> Self {
@@ -634,8 +661,41 @@ where
         }
 
         landmarks.sort_unstable();
+        constraints.unify();
 
         (Arc::new(constraints), Arc::new(landmarks))
+    }
+
+    pub fn get_constraints_alt(
+        &self,
+        agent: usize,
+    ) -> (ConstraintSet<S, C>, Vec<A2<Arc<Constraint<S, C>>>>) {
+        let mut constraints = ConstraintSet::default();
+        let mut landmarks = vec![];
+
+        let mut current = self;
+        loop {
+            if let Some(constraint) = &current.constraint {
+                if constraint.agent == agent {
+                    constraints.add(constraint.clone());
+                }
+            }
+            if let Some(T2(from, to)) = &current.landmark {
+                if from.agent == agent {
+                    landmarks.push(T2(from.clone(), to.clone()));
+                }
+            }
+
+            if let Some(parent) = &current.parent {
+                current = parent;
+            } else {
+                break;
+            }
+        }
+
+        constraints.unify();
+
+        (constraints, landmarks)
     }
 
     pub fn get_solutions(&self, n_agents: usize) -> Vec<&Solution<Arc<SippState<S, C>>, A, C, DC>> {
@@ -672,13 +732,71 @@ where
 
         solutions.into_iter().map(|s| s.unwrap()).collect()
     }
+
+    fn contains_landmark(&self, landmark: T2<&Constraint<S, C>, &Constraint<S, C>>) -> bool {
+        let mut current = self;
+
+        loop {
+            if let Some(T2(from, to)) = &current.landmark {
+                if from.state == landmark.0.state
+                    && to.state == landmark.1.state
+                    && (from.interval.contains(&landmark.0.interval)
+                        || landmark.0.interval.contains(&from.interval))
+                    && (to.interval.contains(&landmark.1.interval)
+                        || landmark.1.interval.contains(&to.interval))
+                {
+                    return true;
+                }
+            }
+
+            if let Some(parent) = current.parent.as_ref() {
+                current = parent;
+            } else {
+                break;
+            }
+        }
+
+        false
+    }
+
+    fn conflicting_constraints(&self, agent: usize) -> bool {
+        let (constraints, landmarks) = self.get_constraints_alt(agent);
+
+        for landmark in landmarks.iter() {
+            if let Some(constraint_set) =
+                constraints.get_action_constraints(&landmark.0.state, &landmark.1.state)
+            {
+                for constraint in constraint_set {
+                    if constraint.interval.contains(&landmark.0.interval) {
+                        return true;
+                    }
+                }
+            }
+            if let Some(constraint_set) = constraints.get_state_constraints(&landmark.0.state) {
+                for constraint in constraint_set {
+                    if constraint.interval.contains(&landmark.0.interval) {
+                        return true;
+                    }
+                }
+            }
+            if let Some(constraint_set) = constraints.get_state_constraints(&landmark.1.state) {
+                for constraint in constraint_set {
+                    if constraint.interval.contains(&landmark.1.interval) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
 }
 
 // TODO: add high-level heuristic to ordering
 impl<S, A, C, DC> PartialEq for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -689,7 +807,7 @@ where
 impl<S, A, C, DC> Eq for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
 }
@@ -697,7 +815,7 @@ where
 impl<S, A, C, DC> PartialOrd for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -708,7 +826,7 @@ where
 impl<S, A, C, DC> Ord for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash,
-    C: Ord + Default + LimitValues,
+    C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -777,29 +895,19 @@ mod tests {
             )),
         ];
 
-        let pivots = Arc::new(vec![
-            Arc::new(SimpleState(GraphNodeId(0))),
-            Arc::new(SimpleState(GraphNodeId(9))),
-        ]);
-
-        let heuristic_to_pivots = Arc::new(vec![
-            Arc::new(ReverseResumableAStar::new(
-                transition_system.clone(),
-                tasks[0].clone(),
-                Arc::new(SimpleHeuristic::new(
-                    transition_system.clone(),
-                    tasks[0].clone(),
-                )),
-            )),
-            Arc::new(ReverseResumableAStar::new(
-                transition_system.clone(),
-                tasks[1].clone(),
-                Arc::new(SimpleHeuristic::new(
-                    transition_system.clone(),
-                    tasks[1].clone(),
-                )),
-            )),
-        ]);
+        let pivots = Arc::new(tasks.iter().map(|t| t.goal_state.clone()).collect());
+        let heuristic_to_pivots = Arc::new(
+            tasks
+                .iter()
+                .map(|t| {
+                    Arc::new(ReverseResumableAStar::new(
+                        transition_system.clone(),
+                        t.clone(),
+                        Arc::new(SimpleHeuristic::new(transition_system.clone(), t.clone())),
+                    ))
+                })
+                .collect(),
+        );
 
         let config = CbsConfig::new(
             tasks,
@@ -810,8 +918,16 @@ mod tests {
 
         let mut solver = ConflictBasedSearch::new(transition_system.clone());
 
-        let solution = solver.solve(&config);
+        let solutions = solver.solve(&config).unwrap();
 
-        dbg!(solution);
+        assert_eq!(
+            solutions
+                .iter()
+                .zip(config.tasks.iter())
+                .map(|(sol, task)| *sol.costs.last().unwrap() - task.initial_cost)
+                .sum::<MyDuration>()
+                .0,
+            Duration::seconds(20) + Duration::nanoseconds(187500000)
+        );
     }
 }

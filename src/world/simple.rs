@@ -1,4 +1,5 @@
 use std::{
+    iter::Sum,
     ops::{Add, Div, Sub},
     sync::Arc,
 };
@@ -215,6 +216,12 @@ impl Div<i32> for MyDuration {
 
     fn div(self, rhs: i32) -> Self::Output {
         MyDuration(self.0 / rhs)
+    }
+}
+
+impl Sum<MyDuration> for MyDuration {
+    fn sum<I: Iterator<Item = MyDuration>>(iter: I) -> Self {
+        iter.fold(MyDuration::default(), |a, b| MyDuration(a.0 + b.0))
     }
 }
 

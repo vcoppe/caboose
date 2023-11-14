@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
@@ -347,6 +347,10 @@ where
     pub fn overlaps(&self, other: &Self) -> bool {
         self.start <= other.end && other.start <= self.end
     }
+
+    pub fn contains(&self, other: &Self) -> bool {
+        self.start <= other.start && other.end <= self.end
+    }
 }
 
 /// The types of constraints that can be imposed on agents in a search algorithm.
@@ -433,16 +437,16 @@ where
 pub struct ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
-    state_constraints: HashMap<Arc<S>, BTreeSet<Arc<Constraint<S, C>>>>,
-    action_constraints: HashMap<(Arc<S>, Arc<S>), BTreeSet<Arc<Constraint<S, C>>>>,
+    pub state_constraints: HashMap<Arc<S>, Vec<Arc<Constraint<S, C>>>>,
+    pub action_constraints: HashMap<(Arc<S>, Arc<S>), Vec<Arc<Constraint<S, C>>>>,
 }
 
 impl<S, C> Default for ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
     fn default() -> Self {
         Self {
@@ -455,7 +459,7 @@ where
 impl<S, C> ConstraintSet<S, C>
 where
     S: State + Eq + Hash,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
     pub fn add(&mut self, constraint: Arc<Constraint<S, C>>) {
         match constraint.type_ {
@@ -463,7 +467,7 @@ where
                 self.state_constraints
                     .entry(constraint.state.clone())
                     .or_default()
-                    .insert(constraint);
+                    .push(constraint);
             }
             ConstraintType::Action => {
                 self.action_constraints
@@ -472,15 +476,12 @@ where
                         constraint.next.as_ref().unwrap().clone(),
                     ))
                     .or_default()
-                    .insert(constraint);
+                    .push(constraint);
             }
         }
     }
 
-    pub fn get_state_constraints(
-        &self,
-        state: &Arc<S>,
-    ) -> Option<&BTreeSet<Arc<Constraint<S, C>>>> {
+    pub fn get_state_constraints(&self, state: &Arc<S>) -> Option<&Vec<Arc<Constraint<S, C>>>> {
         self.state_constraints.get(state)
     }
 
@@ -488,8 +489,73 @@ where
         &self,
         from: &Arc<S>,
         to: &Arc<S>,
-    ) -> Option<&BTreeSet<Arc<Constraint<S, C>>>> {
+    ) -> Option<&Vec<Arc<Constraint<S, C>>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
+    }
+
+    pub fn unify(&mut self) {
+        for constraints in self.state_constraints.values_mut() {
+            constraints.sort_unstable();
+
+            let mut unified_constraints = vec![];
+
+            let mut i = 0;
+            while i < constraints.len() {
+                let mut constraint = constraints[i].clone();
+
+                let mut j = i + 1;
+                while j < constraints.len()
+                    && constraint.interval.overlaps(&constraints[j].interval)
+                {
+                    constraint = Arc::new(Constraint::new_state_constraint(
+                        constraint.agent,
+                        constraint.state.clone(),
+                        Interval::new(
+                            constraint.interval.start,
+                            constraint.interval.end.max(constraints[j].interval.end),
+                        ),
+                    ));
+                    j += 1;
+                }
+
+                unified_constraints.push(constraint);
+                i = j + 1;
+            }
+
+            *constraints = unified_constraints;
+        }
+
+        for constraints in self.action_constraints.values_mut() {
+            constraints.sort_unstable();
+
+            let mut unified_constraints = vec![];
+
+            let mut i = 0;
+            while i < constraints.len() {
+                let mut constraint = constraints[i].clone();
+
+                let mut j = i + 1;
+                while j < constraints.len()
+                    && constraint.interval.overlaps(&constraints[j].interval)
+                {
+                    constraint = Arc::new(Constraint::new_action_constraint(
+                        constraint.agent,
+                        constraint.state.clone(),
+                        constraint.next.as_ref().unwrap().clone(),
+                        Interval::new(
+                            constraint.interval.start,
+                            constraint.interval.end.max(constraints[j].interval.end),
+                        ),
+                    ));
+                    j += 1;
+                }
+
+                unified_constraints.push(constraint);
+                i = j + 1;
+            }
+
+            *constraints = unified_constraints;
+        }
     }
 }
 

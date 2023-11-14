@@ -81,4 +81,14 @@ impl Graph {
     pub fn get_edges_out(&self, id: GraphNodeId) -> &[GraphEdgeId] {
         &self.edges_out[id.0]
     }
+
+    /// Returns the number of nodes in the graph.
+    pub fn num_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns the number of edges in the graph.
+    pub fn num_edges(&self) -> usize {
+        self.edges.len()
+    }
 }
