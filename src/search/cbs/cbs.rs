@@ -170,6 +170,9 @@ where
         // Get the agents involved in the conflict
         let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
 
+        // Get the current solutions
+        let current_solutions = node.get_solutions(config.n_agents);
+
         // Create the successor nodes, the new constraints and compute the new solutions
         let (mut successors, mut solutions, constraints) =
             self.get_successors(config, node, conflict);
@@ -184,8 +187,9 @@ where
                 successor.parent = Some(node.clone());
 
                 // Update the total cost of the successor node
-                successor.total_cost = *solution.costs.last().unwrap() + node.total_cost
-                    - config.tasks[agents[i]].initial_cost;
+                successor.total_cost = node.total_cost
+                    - (*current_solutions[agents[i]].costs.last().unwrap()
+                        - *solution.costs.last().unwrap());
 
                 // Add the solution to the successor node
                 successor.solutions.push(solution);
@@ -578,7 +582,7 @@ where
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
-    total_cost: DC,
+    pub total_cost: DC,
     parent: Option<Arc<Self>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
     pub conflicts: Vec<Arc<Conflict<S, A, C, DC>>>,
@@ -913,7 +917,7 @@ mod tests {
             tasks,
             pivots,
             heuristic_to_pivots,
-            MyDuration(Duration::milliseconds(100)),
+            MyDuration(Duration::microseconds(1)),
         );
 
         let mut solver = ConflictBasedSearch::new(transition_system.clone());
@@ -927,7 +931,7 @@ mod tests {
                 .map(|(sol, task)| *sol.costs.last().unwrap() - task.initial_cost)
                 .sum::<MyDuration>()
                 .0,
-            Duration::seconds(20) + Duration::nanoseconds(187500000)
+            Duration::seconds(20)
         );
     }
 }
