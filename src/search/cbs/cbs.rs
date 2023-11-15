@@ -86,7 +86,7 @@ where
     }
 
     fn enqueue(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>, mut node: CbsNode<S, A, C, DC>) {
-        if self.compute_conflicts(config, &mut node, config.n_agents) {
+        if self.compute_conflicts(config, &mut node) {
             self.queue.push(Reverse(Arc::new(node)));
         }
     }
@@ -343,9 +343,8 @@ where
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &mut CbsNode<S, A, C, DC>,
-        n_agents: usize,
     ) -> bool {
-        let solutions = node.get_solutions(n_agents);
+        let solutions = node.get_solutions(config.n_agents);
 
         let mut conflicts = vec![];
         if let Some(parent) = &node.parent {
@@ -361,7 +360,7 @@ where
                 });
 
             // Compute conflicts between the given agent and all other agents
-            for other in 0..n_agents {
+            for other in 0..config.n_agents {
                 if other == agent {
                     continue;
                 }
@@ -377,8 +376,8 @@ where
             }
         } else {
             // Root node, compute conflicts between each pair of solutions
-            for i in 0..n_agents {
-                for j in i + 1..n_agents {
+            for i in 0..config.n_agents {
+                for j in i + 1..config.n_agents {
                     if let Some((conflict, avoidable)) =
                         self.get_conflicts(config, node, &solutions, T2(i, j))
                     {
