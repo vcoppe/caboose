@@ -2,7 +2,7 @@ use std::{
     cmp::Reverse,
     collections::{
         hash_map::Entry::{Occupied, Vacant},
-        BinaryHeap, HashMap, HashSet,
+        BinaryHeap,
     },
     fmt::Debug,
     hash::Hash,
@@ -11,6 +11,8 @@ use std::{
     sync::Arc,
     vec,
 };
+
+use fxhash::{FxHashMap, FxHashSet};
 
 use crate::{
     Action, ConstraintSet, Heuristic, Interval, LimitValues, SearchNode, Solution, State, Task,
@@ -40,9 +42,9 @@ where
 {
     transition_system: Arc<TS>,
     queue: BinaryHeap<Reverse<SearchNode<SippState<S, C>, C, DC>>>,
-    distance: HashMap<Arc<SippState<S, C>>, C>,
-    closed: HashSet<Arc<SippState<S, C>>>,
-    parent: HashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
+    distance: FxHashMap<Arc<SippState<S, C>>, C>,
+    closed: FxHashSet<Arc<SippState<S, C>>>,
+    parent: FxHashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
     _phantom: PhantomData<(A, H)>,
 }
 
@@ -69,9 +71,9 @@ where
         SafeIntervalPathPlanning {
             transition_system,
             queue: BinaryHeap::new(),
-            distance: HashMap::new(),
-            closed: HashSet::new(),
-            parent: HashMap::new(),
+            distance: FxHashMap::default(),
+            closed: FxHashSet::default(),
+            parent: FxHashMap::default(),
             _phantom: PhantomData::default(),
         }
     }

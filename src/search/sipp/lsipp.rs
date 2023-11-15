@@ -1,11 +1,12 @@
 use std::{
-    collections::HashMap,
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
     sync::Arc,
 };
+
+use fxhash::FxHashMap;
 
 use crate::{
     Action, ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval,
@@ -35,7 +36,7 @@ where
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    parent: HashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
+    parent: FxHashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
 }
 
 impl<TS, S, A, C, DC, H> SafeIntervalPathPlanningWithLandmarks<TS, S, A, C, DC, H>
@@ -60,7 +61,7 @@ where
     pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
             sipp: SafeIntervalPathPlanning::new(transition_system),
-            parent: HashMap::new(),
+            parent: FxHashMap::default(),
             solutions: vec![],
         }
     }

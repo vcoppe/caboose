@@ -1,15 +1,17 @@
-use std::hash::Hash;
-use std::marker::PhantomData;
-use std::ops::Add;
-use std::sync::{Arc, Mutex, RwLock};
 use std::{
     cmp::Reverse,
     collections::{
         hash_map::Entry::{Occupied, Vacant},
-        BinaryHeap, HashMap, HashSet,
+        BinaryHeap,
     },
+    hash::Hash,
+    marker::PhantomData,
+    ops::Add,
     ops::Sub,
+    sync::{Arc, Mutex, RwLock},
 };
+
+use fxhash::{FxHashMap, FxHashSet};
 
 use crate::{abstraction::TransitionSystem, Heuristic, Task};
 use crate::{LimitValues, SearchNode, State};
@@ -39,8 +41,8 @@ where
     /// The heuristic must be an estimate of the distance to the start state
     heuristic: Arc<H>,
     queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
-    distance: RwLock<HashMap<Arc<S>, C>>,
-    closed: RwLock<HashSet<Arc<S>>>,
+    distance: RwLock<FxHashMap<Arc<S>, C>>,
+    closed: RwLock<FxHashSet<Arc<S>>>,
     _phantom: PhantomData<A>,
 }
 
@@ -88,8 +90,8 @@ where
             task: task.clone(),
             heuristic,
             queue: Mutex::new(BinaryHeap::new()),
-            distance: RwLock::new(HashMap::new()),
-            closed: RwLock::new(HashSet::new()),
+            distance: RwLock::new(FxHashMap::default()),
+            closed: RwLock::new(FxHashSet::default()),
             _phantom: PhantomData::default(),
         };
         rra.init();
