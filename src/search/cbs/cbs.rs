@@ -307,29 +307,40 @@ where
         config: &CbsConfig<TS, S, A, C, DC, H>,
         moves: A2<&Move<S, A, C>>,
     ) -> Constraint<S, C> {
+        if moves[1].interval.end == C::max_value() {
+            // The second agent stays at the conflicting position forever,
+            // so the first agent will never be able to move or stay in that position
+            let interval = Interval::new(moves[0].interval.start, C::max_value());
+            if moves[0].action.is_some() {
+                return Constraint::new_action_constraint(
+                    moves[0].agent,
+                    moves[0].from.clone(),
+                    moves[0].to.clone(),
+                    interval,
+                );
+            } else {
+                return Constraint::new_state_constraint(
+                    moves[0].agent,
+                    moves[0].from.clone(),
+                    interval,
+                );
+            }
+        }
+
         let mut lo = moves[0].interval.start;
-        let mut hi = moves[0].interval.end.max(moves[1].interval.end);
+        let mut hi = moves[1].interval.end; // Starting the move after the second agent has finished its move is always okay
 
         let mut delayed_move = moves[0].clone();
-        delayed_move.interval.start = hi;
-        delayed_move.interval.end = if hi == C::max_value() {
-            hi
-        } else {
-            hi + (moves[0].interval.end - moves[0].interval.start)
-        };
+        while hi - lo > config.collision_precision {
+            let mid = lo + (hi - lo) / 2;
 
-        if !self.transition_system.conflict(T2(&delayed_move, moves[1])) {
-            while hi - lo > config.collision_precision {
-                let mid = lo + (hi - lo) / 2;
+            delayed_move.interval.start = mid;
+            delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
 
-                delayed_move.interval.start = mid;
-                delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
-
-                if self.transition_system.conflict(T2(&delayed_move, moves[1])) {
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
+            if self.transition_system.conflict(T2(&delayed_move, moves[1])) {
+                lo = mid;
+            } else {
+                hi = mid;
             }
         }
 

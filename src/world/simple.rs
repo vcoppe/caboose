@@ -183,7 +183,10 @@ impl Add<MyDuration> for MyTime {
     type Output = Self;
 
     fn add(self, rhs: MyDuration) -> Self::Output {
-        MyTime(self.0 + rhs.0)
+        self.0
+            .checked_add_signed(rhs.0)
+            .map(|r| MyTime(r))
+            .unwrap_or(MyTime::max_value())
     }
 }
 
