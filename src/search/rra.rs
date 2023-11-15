@@ -8,10 +8,11 @@ use std::{
     marker::PhantomData,
     ops::Add,
     ops::Sub,
-    sync::{Arc, Mutex, RwLock},
+    sync::Arc,
 };
 
 use fxhash::{FxHashMap, FxHashSet};
+use parking_lot::{Mutex, RwLock};
 
 use crate::{abstraction::TransitionSystem, Heuristic, Task};
 use crate::{LimitValues, SearchNode, State};
@@ -108,27 +109,26 @@ where
 
         self.distance
             .write()
-            .unwrap()
             .insert(goal_node.state.clone(), goal_node.cost);
-        self.queue.get_mut().unwrap().push(Reverse(goal_node));
+        self.queue.get_mut().push(Reverse(goal_node));
     }
 
     /// Computes the shortest path between the given state and the goal state,
     /// or returns directly if it has already been computed.
     fn find_path(&self, state: Arc<S>) -> Option<DC> {
-        if self.closed.read().unwrap().contains(&state) {
+        if self.closed.read().contains(&state) {
             // The distance has already been computed
-            return Some(self.distance.read().unwrap()[&state] - self.task.initial_cost);
+            return Some(self.distance.read()[&state] - self.task.initial_cost);
         }
 
-        let mut queue = self.queue.lock().unwrap(); // Lock the queue to avoid concurrent executions of the algorithm
-        if self.closed.read().unwrap().contains(&state) {
+        let mut queue = self.queue.lock(); // Lock the queue to avoid concurrent executions of the algorithm
+        if self.closed.read().contains(&state) {
             // Check if the distance has been computed while waiting for the lock
-            return Some(self.distance.read().unwrap()[&state] - self.task.initial_cost);
+            return Some(self.distance.read()[&state] - self.task.initial_cost);
         }
 
         while let Some(Reverse(current)) = queue.pop() {
-            if current.cost > self.distance.read().unwrap()[&current.state] {
+            if current.cost > self.distance.read()[&current.state] {
                 // A better path has already been found
                 continue;
             }
@@ -152,12 +152,7 @@ where
                         .transition_system
                         .reverse_transition_cost(current.state.clone(), &action);
 
-                let improved = match self
-                    .distance
-                    .write()
-                    .unwrap()
-                    .entry(successor_state.clone())
-                {
+                let improved = match self.distance.write().entry(successor_state.clone()) {
                     Occupied(mut e) => {
                         if successor_cost < *e.get() {
                             *e.get_mut() = successor_cost;
@@ -183,7 +178,7 @@ where
                 }
             }
 
-            self.closed.write().unwrap().insert(current.state.clone()); // Mark the state as closed because it has been expanded
+            self.closed.write().insert(current.state.clone()); // Mark the state as closed because it has been expanded
         }
 
         None
