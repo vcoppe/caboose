@@ -90,7 +90,7 @@ where
         let safe_intervals = Self::get_safe_intervals(config.constraints.clone(), &initial_state);
         let safe_interval = safe_intervals
             .iter()
-            .find(|interval| initial_time >= interval.start && initial_time <= interval.end);
+            .find(|interval| initial_time >= interval.start && initial_time < interval.end);
 
         if safe_interval.is_none() {
             return None;
@@ -227,7 +227,8 @@ where
             }
             let heuristic = heuristic.unwrap();
 
-            if current.cost + transition_cost + heuristic > config.task.goal_state.safe_interval.end
+            if current.cost + transition_cost + heuristic
+                >= config.task.goal_state.safe_interval.end
             {
                 // The goal state is not reachable in time
                 continue;
@@ -244,7 +245,7 @@ where
             {
                 let mut successor_cost = current.cost + transition_cost;
 
-                if successor_cost > safe_interval.end {
+                if successor_cost >= safe_interval.end {
                     // Cannot reach this safe interval in time
                     continue;
                 }
@@ -259,7 +260,7 @@ where
                         continue;
                     }
                     successor_cost = safe_interval.start; // Try to depart later to arrive at the right time
-                    if successor_cost - transition_cost > current.state.safe_interval.end {
+                    if successor_cost - transition_cost >= current.state.safe_interval.end {
                         // Cannot depart that late from the current safe interval
                         continue;
                     }
@@ -269,7 +270,7 @@ where
                 if let Some(collision_interval) = action_constraints
                     .map(|col| {
                         col.iter()
-                            .find(|c| c.interval.end >= successor_cost - transition_cost)
+                            .find(|c| c.interval.end > successor_cost - transition_cost)
                             .map(|c| c.interval)
                     })
                     .flatten()
@@ -285,15 +286,15 @@ where
                         }
                         successor_cost = collision_interval.end + transition_cost; // Try to depart later
 
-                        if successor_cost - transition_cost > current.state.safe_interval.end
-                            || successor_cost > safe_interval.end
+                        if successor_cost - transition_cost >= current.state.safe_interval.end
+                            || successor_cost >= safe_interval.end
                         {
                             continue;
                         }
                     }
                 }
 
-                if successor_cost + heuristic > config.task.goal_state.safe_interval.end {
+                if successor_cost + heuristic >= config.task.goal_state.safe_interval.end {
                     // The goal state is not reachable in time
                     continue;
                 }
@@ -576,7 +577,7 @@ where
 
     fn is_goal(&self, state: &SearchNode<SippState<S, C>, C, DC>) -> bool {
         state.cost >= self.goal_state.safe_interval.start
-            && state.cost <= self.goal_state.safe_interval.end
+            && state.cost < self.goal_state.safe_interval.end
             && self
                 .internal_task
                 .is_goal_state(state.state.internal_state.as_ref())
