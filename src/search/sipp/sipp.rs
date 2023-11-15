@@ -90,7 +90,7 @@ where
         let safe_intervals = Self::get_safe_intervals(config.constraints.clone(), &initial_state);
         let safe_interval = safe_intervals
             .iter()
-            .find(|interval| interval.start <= initial_time && interval.end >= initial_time);
+            .find(|interval| initial_time >= interval.start && initial_time <= interval.end);
 
         if safe_interval.is_none() {
             return None;
@@ -244,7 +244,7 @@ where
             {
                 let mut successor_cost = current.cost + transition_cost;
 
-                if successor_cost >= safe_interval.end {
+                if successor_cost > safe_interval.end {
                     // Cannot reach this safe interval in time
                     continue;
                 }
@@ -265,6 +265,7 @@ where
                     }
                 }
 
+                // Check collision along the action
                 if let Some(collision_interval) = action_constraints
                     .map(|col| {
                         col.iter()
