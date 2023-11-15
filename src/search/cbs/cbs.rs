@@ -545,7 +545,7 @@ where
 pub struct CbsConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Eq + Hash,
+    S: Debug + State + Eq + Hash,
     C: Eq
         + PartialOrd
         + Ord
@@ -570,7 +570,7 @@ where
 impl<TS, S, A, C, DC, H> CbsConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Eq + Hash,
+    S: Debug + State + Eq + Hash,
     C: Eq
         + PartialOrd
         + Ord

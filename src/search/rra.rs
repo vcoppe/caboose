@@ -4,6 +4,7 @@ use std::{
         hash_map::Entry::{Occupied, Vacant},
         BinaryHeap,
     },
+    fmt::Debug,
     hash::Hash,
     marker::PhantomData,
     ops::Add,
@@ -25,7 +26,7 @@ use crate::{LimitValues, SearchNode, State};
 pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Hash + Eq,
+    S: Debug + State + Hash + Eq,
     C: Eq
         + PartialOrd
         + Ord
@@ -50,7 +51,7 @@ where
 impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Hash + Eq,
+    S: Debug + State + Hash + Eq,
     C: Eq
         + PartialOrd
         + Ord
@@ -70,7 +71,7 @@ where
 impl<TS, S, A, C, DC, H> ReverseResumableAStar<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Hash + Eq,
+    S: Debug + State + Hash + Eq,
     C: Eq
         + PartialOrd
         + Ord
@@ -127,7 +128,16 @@ where
             return Some(self.distance.read()[&state] - self.task.initial_cost);
         }
 
-        while let Some(Reverse(current)) = queue.pop() {
+        loop {
+            let current = queue.peek();
+            if current.is_none() {
+                break;
+            }
+
+            let current = &current.unwrap().0;
+
+            self.closed.write().insert(current.state.clone()); // Mark the state as closed because the optimal distance has been found
+
             if current.cost > self.distance.read()[&current.state] {
                 // A better path has already been found
                 continue;
@@ -138,6 +148,9 @@ where
                 return Some(current.cost - self.task.initial_cost);
             }
 
+            // Only pop the current node if we are really going to expand it
+            let current = queue.pop().unwrap().0;
+
             // Expand the current state and enqueue its successors if a better path has been found
             for action in self
                 .transition_system
@@ -147,6 +160,7 @@ where
                     self.transition_system
                         .reverse_transition(current.state.clone(), &action),
                 );
+
                 let successor_cost = current.cost
                     + self
                         .transition_system
@@ -177,8 +191,6 @@ where
                     }
                 }
             }
-
-            self.closed.write().insert(current.state.clone()); // Mark the state as closed because it has been expanded
         }
 
         None

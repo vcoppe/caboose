@@ -78,8 +78,8 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    pivots: Arc<Vec<Arc<S>>>,
     heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    task_heuristic: Option<usize>,
     _phantom: PhantomData<(TS, S, A, DC)>,
 }
 
@@ -97,8 +97,10 @@ where
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     ) -> Self {
         DifferentialHeuristic {
+            task_heuristic: pivots
+                .iter()
+                .position(|pivot| pivot.is_equivalent(task.goal_state.as_ref())),
             task,
-            pivots,
             heuristic_to_pivots,
             _phantom: PhantomData::default(),
         }
@@ -114,20 +116,20 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     fn get_heuristic(&self, state: Arc<S>) -> Option<DC> {
-        let mut heuristic = C::default() - C::default();
-        for (pivot, heuristic_to_pivot) in self.pivots.iter().zip(self.heuristic_to_pivots.iter()) {
-            if pivot.is_equivalent(self.task.goal_state.as_ref()) {
-                if let Some(h) = heuristic_to_pivot.get_heuristic(state.clone()) {
-                    heuristic = heuristic.max(h);
+        if let Some(task_heuristic) = self.task_heuristic {
+            self.heuristic_to_pivots[task_heuristic].get_heuristic(state.clone())
+        } else {
+            let mut heuristic = C::default() - C::default();
+            for heuristic_to_pivot in self.heuristic_to_pivots.iter() {
+                if let (Some(h1), Some(h2)) = (
+                    heuristic_to_pivot.get_heuristic(state.clone()),
+                    heuristic_to_pivot.get_heuristic(self.task.goal_state.clone()),
+                ) {
+                    heuristic = heuristic.max(h2 - h1).max(h1 - h2)
                 }
-            } else if let (Some(h1), Some(h2)) = (
-                heuristic_to_pivot.get_heuristic(state.clone()),
-                heuristic_to_pivot.get_heuristic(self.task.goal_state.clone()),
-            ) {
-                heuristic = heuristic.max(h2 - h1).max(h1 - h2)
             }
+            Some(heuristic)
         }
-        Some(heuristic)
     }
 }
 
