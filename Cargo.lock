@@ -204,6 +204,7 @@ name = "cbs"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "fxhash",
  "nannou",
  "nannou_egui",
  "ncollide2d",

@@ -47,6 +47,7 @@ where
         DC,
         ReverseResumableAStar<TS, S, A, C, DC, H>,
     >,
+    stats: CbsStats,
 }
 
 impl<TS, S, A, C, DC, H> ConflictBasedSearch<TS, S, A, C, DC, H>
@@ -74,10 +75,12 @@ where
             transition_system,
             queue: BinaryHeap::new(),
             lsipp,
+            stats: CbsStats::default(),
         }
     }
 
     pub fn init(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) {
+        self.stats = CbsStats::default();
         self.queue.clear();
 
         if let Some(root) = self.get_root(config) {
@@ -103,6 +106,9 @@ where
                 config.pivots.clone(),
                 config.heuristic_to_pivots.clone(),
             );
+
+            self.stats.sipp_runs += 1;
+
             if let Some(solution) = self.lsipp.solve(&config) {
                 root.total_cost =
                     *solution.costs.last().unwrap() + root.total_cost - task.initial_cost;
@@ -229,6 +235,8 @@ where
             }
         }
 
+        self.stats.cbs_expanded += 1;
+
         valid_successors
     }
 
@@ -285,6 +293,8 @@ where
                 config.heuristic_to_pivots.clone(),
             )),
         ];
+
+        self.stats.sipp_runs += 2;
 
         (successors, solutions, constraints)
     }
@@ -512,6 +522,10 @@ where
         }
 
         None
+    }
+
+    pub fn get_stats(&self) -> &CbsStats {
+        &self.stats
     }
 }
 
@@ -834,6 +848,22 @@ where
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.total_cost.cmp(&other.total_cost)
+    }
+}
+
+/// Statistics of the Conflict-Based Search algorithm.
+#[derive(Debug)]
+pub struct CbsStats {
+    pub cbs_expanded: usize,
+    pub sipp_runs: usize,
+}
+
+impl Default for CbsStats {
+    fn default() -> Self {
+        Self {
+            cbs_expanded: 0,
+            sipp_runs: 0,
+        }
     }
 }
 
