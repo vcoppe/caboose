@@ -1,12 +1,12 @@
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
     sync::Arc,
 };
 
+use fxhash::FxHashMap;
 use tuple::A2;
 
 use crate::{Move, State, Task, TransitionSystem};
@@ -65,7 +65,7 @@ where
 {
     /// Returns the heuristic value for the given state,
     /// or None if the goal state is not reachable from that state.
-    fn get_heuristic(&self, state: Arc<S>) -> Option<DC>;
+    fn get_heuristic(&self, state: &Arc<S>) -> Option<DC>;
 }
 
 /// Differentiable heuristic built on top of heuristics dealing with
@@ -115,15 +115,15 @@ where
     DC: Ord + Sub<DC, Output = DC> + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    fn get_heuristic(&self, state: Arc<S>) -> Option<DC> {
+    fn get_heuristic(&self, state: &Arc<S>) -> Option<DC> {
         if let Some(task_heuristic) = self.task_heuristic {
-            self.heuristic_to_pivots[task_heuristic].get_heuristic(state.clone())
+            self.heuristic_to_pivots[task_heuristic].get_heuristic(state)
         } else {
             let mut heuristic = C::default() - C::default();
             for heuristic_to_pivot in self.heuristic_to_pivots.iter() {
                 if let (Some(h1), Some(h2)) = (
-                    heuristic_to_pivot.get_heuristic(state.clone()),
-                    heuristic_to_pivot.get_heuristic(self.task.goal_state.clone()),
+                    heuristic_to_pivot.get_heuristic(state),
+                    heuristic_to_pivot.get_heuristic(&self.task.goal_state),
                 ) {
                     heuristic = heuristic.max(h2 - h1).max(h1 - h2)
                 }
@@ -169,7 +169,7 @@ where
     C: Copy + Eq + Ord + Add<DC, Output = C>,
     DC: Copy,
 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if self.cost + self.heuristic == other.cost + other.heuristic {
             return other.cost.partial_cmp(&self.cost); // Estimation is more precise when the cost is larger
         } else {
@@ -183,7 +183,7 @@ where
     C: Copy + Eq + Ord + Add<DC, Output = C>,
     DC: Copy,
 {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         if self.cost + self.heuristic == other.cost + other.heuristic {
             return other.cost.cmp(&self.cost); // Estimation is more precise when the cost is larger
         } else {
@@ -441,8 +441,8 @@ where
     S: State + Eq + Hash,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
-    pub state_constraints: HashMap<Arc<S>, Vec<Arc<Constraint<S, C>>>>,
-    pub action_constraints: HashMap<(Arc<S>, Arc<S>), Vec<Arc<Constraint<S, C>>>>,
+    pub state_constraints: FxHashMap<Arc<S>, Vec<Arc<Constraint<S, C>>>>,
+    pub action_constraints: FxHashMap<(Arc<S>, Arc<S>), Vec<Arc<Constraint<S, C>>>>,
 }
 
 impl<S, C> Default for ConstraintSet<S, C>

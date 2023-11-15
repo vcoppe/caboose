@@ -50,31 +50,31 @@ impl State for SimpleState {
 }
 
 impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld {
-    fn actions_from(&self, state: Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
+    fn actions_from(&self, state: &Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
         self.graph.get_edges_out(state.0).iter()
     }
 
-    fn transition(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> SimpleState {
+    fn transition(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> SimpleState {
         SimpleState(self.graph.get_edge(*action).to)
     }
 
-    fn transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> MyTime {
+    fn transition_cost(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> MyTime {
         self.time(*action)
     }
 
-    fn reverse_actions_from(&self, state: Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
+    fn reverse_actions_from(&self, state: &Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
         self.graph.get_edges_in(state.0).iter()
     }
 
-    fn reverse_transition(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> SimpleState {
+    fn reverse_transition(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> SimpleState {
         SimpleState(self.graph.get_edge(*action).from)
     }
 
-    fn reverse_transition_cost(&self, _state: Arc<SimpleState>, action: &GraphEdgeId) -> MyTime {
+    fn reverse_transition_cost(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> MyTime {
         self.time(*action)
     }
 
-    fn can_wait_at(&self, _state: Arc<SimpleState>) -> bool {
+    fn can_wait_at(&self, _state: &Arc<SimpleState>) -> bool {
         true
     }
 
@@ -137,7 +137,7 @@ impl SimpleHeuristic {
 }
 
 impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleHeuristic {
-    fn get_heuristic(&self, state: Arc<SimpleState>) -> Option<MyTime> {
+    fn get_heuristic(&self, state: &Arc<SimpleState>) -> Option<MyTime> {
         Some(
             self.transition_system
                 .time_between(state.0, self.goal_state.0),

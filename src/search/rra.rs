@@ -63,8 +63,8 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    fn get_heuristic(&self, state: Arc<S>) -> Option<DC> {
-        self.find_path(state.clone())
+    fn get_heuristic(&self, state: &Arc<S>) -> Option<DC> {
+        self.find_path(state)
     }
 }
 
@@ -116,16 +116,16 @@ where
 
     /// Computes the shortest path between the given state and the goal state,
     /// or returns directly if it has already been computed.
-    fn find_path(&self, state: Arc<S>) -> Option<DC> {
-        if self.closed.read().contains(&state) {
+    fn find_path(&self, state: &Arc<S>) -> Option<DC> {
+        if self.closed.read().contains(state) {
             // The distance has already been computed
-            return Some(self.distance.read()[&state] - self.task.initial_cost);
+            return Some(self.distance.read()[state] - self.task.initial_cost);
         }
 
         let mut queue = self.queue.lock(); // Lock the queue to avoid concurrent executions of the algorithm
-        if self.closed.read().contains(&state) {
+        if self.closed.read().contains(state) {
             // Check if the distance has been computed while waiting for the lock
-            return Some(self.distance.read()[&state] - self.task.initial_cost);
+            return Some(self.distance.read()[state] - self.task.initial_cost);
         }
 
         loop {
@@ -143,7 +143,7 @@ where
                 continue;
             }
 
-            if current.state == state {
+            if current.state == *state {
                 // The optimal distance has been found
                 return Some(current.cost - self.task.initial_cost);
             }
@@ -152,19 +152,16 @@ where
             let current = queue.pop().unwrap().0;
 
             // Expand the current state and enqueue its successors if a better path has been found
-            for action in self
-                .transition_system
-                .reverse_actions_from(current.state.clone())
-            {
+            for action in self.transition_system.reverse_actions_from(&current.state) {
                 let successor_state = Arc::new(
                     self.transition_system
-                        .reverse_transition(current.state.clone(), &action),
+                        .reverse_transition(&current.state, &action),
                 );
 
                 let successor_cost = current.cost
                     + self
                         .transition_system
-                        .reverse_transition_cost(current.state.clone(), &action);
+                        .reverse_transition_cost(&current.state, &action);
 
                 let improved = match self.distance.write().entry(successor_state.clone()) {
                     Occupied(mut e) => {
@@ -182,7 +179,7 @@ where
                 };
 
                 if improved {
-                    if let Some(heuristic) = self.heuristic.get_heuristic(successor_state.clone()) {
+                    if let Some(heuristic) = self.heuristic.get_heuristic(&successor_state) {
                         queue.push(Reverse(SearchNode {
                             state: successor_state,
                             cost: successor_cost,
@@ -258,7 +255,7 @@ mod tests {
             for y in 0..size {
                 assert_eq!(
                     heuristic
-                        .get_heuristic(Arc::new(SimpleState(GraphNodeId(x + y * size))))
+                        .get_heuristic(&Arc::new(SimpleState(GraphNodeId(x + y * size))))
                         .unwrap(),
                     OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );

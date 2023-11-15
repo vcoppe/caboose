@@ -18,17 +18,17 @@ pub trait TransitionSystem<S, A, C, DC>
 where
     C: Ord + LimitValues,
 {
-    fn actions_from(&self, state: Arc<S>) -> slice::Iter<A>;
+    fn actions_from(&self, state: &Arc<S>) -> slice::Iter<A>;
 
-    fn transition(&self, state: Arc<S>, action: &A) -> S;
-    fn transition_cost(&self, state: Arc<S>, action: &A) -> DC;
+    fn transition(&self, state: &Arc<S>, action: &A) -> S;
+    fn transition_cost(&self, state: &Arc<S>, action: &A) -> DC;
 
-    fn reverse_actions_from(&self, state: Arc<S>) -> slice::Iter<A>;
+    fn reverse_actions_from(&self, state: &Arc<S>) -> slice::Iter<A>;
 
-    fn reverse_transition(&self, state: Arc<S>, action: &A) -> S;
-    fn reverse_transition_cost(&self, state: Arc<S>, action: &A) -> DC;
+    fn reverse_transition(&self, state: &Arc<S>, action: &A) -> S;
+    fn reverse_transition_cost(&self, state: &Arc<S>, action: &A) -> DC;
 
-    fn can_wait_at(&self, state: Arc<S>) -> bool;
+    fn can_wait_at(&self, state: &Arc<S>) -> bool;
 
     /// Returns true if the two moves lead to a collision.
     fn conflict(&self, moves: A2<&Move<S, A, C>>) -> bool;

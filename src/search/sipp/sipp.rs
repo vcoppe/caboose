@@ -89,7 +89,7 @@ where
         let initial_time = config.task.initial_cost;
         let goal_state = config.task.goal_state.clone();
 
-        let safe_intervals = Self::get_safe_intervals(config.constraints.clone(), &initial_state);
+        let safe_intervals = Self::get_safe_intervals(&config.constraints, &initial_state);
         let safe_interval = safe_intervals
             .iter()
             .find(|interval| initial_time >= interval.start && initial_time < interval.end);
@@ -213,17 +213,17 @@ where
 
         for action in self
             .transition_system
-            .actions_from(current.state.internal_state.clone())
+            .actions_from(&current.state.internal_state)
         {
             let successor_state = Arc::new(
                 self.transition_system
-                    .transition(current.state.internal_state.clone(), &action),
+                    .transition(&current.state.internal_state, &action),
             );
             let transition_cost = self
                 .transition_system
-                .transition_cost(current.state.internal_state.clone(), &action);
+                .transition_cost(&current.state.internal_state, &action);
 
-            let heuristic = config.heuristic.get_heuristic(successor_state.clone());
+            let heuristic = config.heuristic.get_heuristic(&successor_state);
             if heuristic.is_none() {
                 continue; // Goal state is not reachable from this state
             }
@@ -243,7 +243,7 @@ where
             // Try to reach any of the safe intervals of the destination state
             // and add the corresponding successors to the queue if a better path has been found
             for safe_interval in
-                Self::get_safe_intervals(config.constraints.clone(), &successor_state).iter()
+                Self::get_safe_intervals(&config.constraints, &successor_state).iter()
             {
                 let mut successor_cost = current.cost + transition_cost;
 
@@ -256,7 +256,7 @@ where
                     // Would arrive too early
                     if !self
                         .transition_system
-                        .can_wait_at(current.state.internal_state.clone())
+                        .can_wait_at(&current.state.internal_state)
                     {
                         // Cannot wait at the current state
                         continue;
@@ -281,7 +281,7 @@ where
                         // Collision detected
                         if !self
                             .transition_system
-                            .can_wait_at(current.state.internal_state.clone())
+                            .can_wait_at(&current.state.internal_state)
                         {
                             // Cannot wait at the current state
                             continue;
@@ -342,7 +342,7 @@ where
 
     /// Returns the safe intervals for the given state, given a set of constraints.
     fn get_safe_intervals(
-        constraints: Arc<ConstraintSet<S, C>>,
+        constraints: &Arc<ConstraintSet<S, C>>,
         state: &Arc<S>,
     ) -> Vec<Interval<C>> {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
@@ -691,7 +691,7 @@ mod tests {
             MyTime,
             MyTime,
             SimpleHeuristic,
-        >::get_safe_intervals(Arc::new(constraints), &state);
+        >::get_safe_intervals(&Arc::new(constraints), &state);
 
         assert_eq!(safe_intervals.len(), 3);
         assert_eq!(safe_intervals[0].end, times[0]);
