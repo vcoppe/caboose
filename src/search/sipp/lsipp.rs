@@ -342,19 +342,18 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chrono::{Duration, Local, TimeZone};
+    use ordered_float::OrderedFloat;
 
     use crate::{
-        Constraint, Graph, GraphNodeId, Interval, LSippConfig, MyDuration, MyTime,
-        ReverseResumableAStar, SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState,
-        SimpleWorld, Task,
+        Constraint, Graph, GraphNodeId, Interval, LSippConfig, ReverseResumableAStar,
+        SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState, SimpleWorld, Task,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f64, y as f64), 1.0);
+                graph.add_node((x as f32, y as f32), 1.0);
             }
         }
         for x in 0..size {
@@ -382,7 +381,6 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         for x in 0..size {
@@ -390,7 +388,7 @@ mod tests {
                 let task = Arc::new(Task::new(
                     Arc::new(SimpleState(GraphNodeId(x + size * y))),
                     Arc::new(SimpleState(GraphNodeId(size * size - 1))),
-                    initial_time,
+                    OrderedFloat(0.0),
                 ));
                 let mut config = LSippConfig::new(
                     task.clone(),
@@ -404,8 +402,7 @@ mod tests {
                 );
                 assert_eq!(
                     *solver.solve(&mut config).unwrap().costs.last().unwrap(),
-                    initial_time
-                        + MyDuration(Duration::seconds(((size - x - 1) + (size - y - 1)) as i64))
+                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
             }
         }
@@ -416,13 +413,12 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
-            initial_time,
+            OrderedFloat(0.0),
         ));
         let mut config = LSippConfig::new(
             task.clone(),
@@ -447,7 +443,7 @@ mod tests {
         );
         assert_eq!(
             *solver.solve(&mut config).unwrap().costs.last().unwrap(),
-            initial_time + MyDuration(Duration::seconds((4 * (size - 1)) as i64))
+            OrderedFloat((4 * (size - 1)) as f32)
         );
     }
 }

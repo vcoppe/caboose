@@ -34,7 +34,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<i32, Output = DC> + Copy + Default,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
@@ -66,7 +66,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<i32, Output = DC> + Copy + Default,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
@@ -332,7 +332,7 @@ where
 
         let mut delayed_move = moves[0].clone();
         while hi - lo > config.collision_precision {
-            let mid = lo + (hi - lo) / 2;
+            let mid = lo + (hi - lo) / 2.0;
 
             delayed_move.interval.start = mid;
             delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
@@ -883,11 +883,10 @@ impl Default for CbsStats {
 mod tests {
     use std::sync::Arc;
 
-    use chrono::{Duration, Local, TimeZone};
+    use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic,
-        SimpleState, SimpleWorld, Task,
+        Graph, GraphNodeId, ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, Task,
     };
 
     use super::{CbsConfig, ConflictBasedSearch};
@@ -896,7 +895,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f64, y as f64), 1.0);
+                graph.add_node((x as f32, y as f32), 1.0);
             }
         }
         for x in 0..size {
@@ -925,18 +924,16 @@ mod tests {
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
 
-        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
-
         let tasks = vec![
             Arc::new(Task::new(
                 Arc::new(SimpleState(GraphNodeId(0))),
                 Arc::new(SimpleState(GraphNodeId(9))),
-                initial_time,
+                OrderedFloat(0.0),
             )),
             Arc::new(Task::new(
                 Arc::new(SimpleState(GraphNodeId(9))),
                 Arc::new(SimpleState(GraphNodeId(0))),
-                initial_time,
+                OrderedFloat(0.0),
             )),
         ];
 
@@ -954,12 +951,7 @@ mod tests {
                 .collect(),
         );
 
-        let config = CbsConfig::new(
-            tasks,
-            pivots,
-            heuristic_to_pivots,
-            MyDuration(Duration::microseconds(1)),
-        );
+        let config = CbsConfig::new(tasks, pivots, heuristic_to_pivots, OrderedFloat(1e-6));
 
         let mut solver = ConflictBasedSearch::new(transition_system.clone());
 
@@ -970,9 +962,8 @@ mod tests {
                 .iter()
                 .zip(config.tasks.iter())
                 .map(|(sol, task)| *sol.costs.last().unwrap() - task.initial_cost)
-                .sum::<MyDuration>()
-                .0,
-            Duration::seconds(20)
+                .sum::<OrderedFloat<f32>>(),
+            OrderedFloat(20.0)
         );
     }
 }

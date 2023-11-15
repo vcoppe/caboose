@@ -590,12 +590,11 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chrono::{Duration, Local, TimeZone};
+    use ordered_float::OrderedFloat;
 
     use crate::{
         search::sipp::sipp::SippConfig, Constraint, ConstraintSet, Graph, GraphEdgeId, GraphNodeId,
-        Interval, MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic, SimpleState,
-        SimpleWorld, Task,
+        Interval, MyTime, ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, Task,
     };
 
     use super::SafeIntervalPathPlanning;
@@ -604,7 +603,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f64, y as f64), 1.0);
+                graph.add_node((x as f32, y as f32), 1.0);
             }
         }
         for x in 0..size {
@@ -632,7 +631,6 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         for x in 0..size {
@@ -640,7 +638,7 @@ mod tests {
                 let task = Arc::new(Task::new(
                     Arc::new(SimpleState(GraphNodeId(x + size * y))),
                     Arc::new(SimpleState(GraphNodeId(size * size - 1))),
-                    initial_time,
+                    OrderedFloat(0.0),
                 ));
                 let config = SippConfig::new(
                     task.clone(),
@@ -654,8 +652,7 @@ mod tests {
                 );
                 assert_eq!(
                     *solver.solve(&config).unwrap().costs.last().unwrap(),
-                    initial_time
-                        + MyDuration(Duration::seconds(((size - x - 1) + (size - y - 1)) as i64))
+                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
             }
         }
@@ -665,23 +662,23 @@ mod tests {
     fn test_safe_intervals() {
         let state = Arc::new(SimpleState(GraphNodeId(0)));
 
-        let dates = vec![
-            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap()),
-            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 11, 0, 0).unwrap()),
-            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 12, 0, 0).unwrap()),
-            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 13, 0, 0).unwrap()),
+        let times = vec![
+            OrderedFloat(10.0),
+            OrderedFloat(11.0),
+            OrderedFloat(12.0),
+            OrderedFloat(13.0),
         ];
 
         let mut constraints = ConstraintSet::default();
         constraints.add(Arc::new(Constraint::new_state_constraint(
             0,
             state.clone(),
-            Interval::new(dates[0], dates[1]),
+            Interval::new(times[0], times[1]),
         )));
         constraints.add(Arc::new(Constraint::new_state_constraint(
             0,
             state.clone(),
-            Interval::new(dates[2], dates[3]),
+            Interval::new(times[2], times[3]),
         )));
 
         let safe_intervals = SafeIntervalPathPlanning::<
@@ -689,15 +686,15 @@ mod tests {
             SimpleState,
             GraphEdgeId,
             MyTime,
-            MyDuration,
+            MyTime,
             SimpleHeuristic,
         >::get_safe_intervals(Arc::new(constraints), &state);
 
         assert_eq!(safe_intervals.len(), 3);
-        assert_eq!(safe_intervals[0].end, dates[0]);
-        assert_eq!(safe_intervals[1].start, dates[1]);
-        assert_eq!(safe_intervals[1].end, dates[2]);
-        assert_eq!(safe_intervals[2].start, dates[3]);
+        assert_eq!(safe_intervals[0].end, times[0]);
+        assert_eq!(safe_intervals[1].start, times[1]);
+        assert_eq!(safe_intervals[1].end, times[2]);
+        assert_eq!(safe_intervals[2].start, times[3]);
     }
 
     #[test]
@@ -705,20 +702,19 @@ mod tests {
         let size = 10;
         let graph = simple_graph(size);
         let transition_system = Arc::new(SimpleWorld::new(graph));
-        let initial_time = MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap());
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
-            initial_time,
+            OrderedFloat(0.0),
         ));
 
-        let dates = vec![
-            initial_time + MyDuration(Duration::seconds(2)),
-            initial_time + MyDuration(Duration::seconds(8)),
-            initial_time + MyDuration(Duration::seconds(12)),
-            initial_time + MyDuration(Duration::seconds(18)),
+        let times = vec![
+            OrderedFloat(2.0),
+            OrderedFloat(8.0),
+            OrderedFloat(12.0),
+            OrderedFloat(18.0),
         ];
 
         let mut constraints = ConstraintSet::default();
@@ -731,12 +727,12 @@ mod tests {
                     constraints.add(Arc::new(Constraint::new_state_constraint(
                         0,
                         state.clone(),
-                        Interval::new(dates[0], dates[1]),
+                        Interval::new(times[0], times[1]),
                     )));
                     constraints.add(Arc::new(Constraint::new_state_constraint(
                         0,
                         state.clone(),
-                        Interval::new(dates[2], dates[3]),
+                        Interval::new(times[2], times[3]),
                     )));
                 }
             }
@@ -755,9 +751,6 @@ mod tests {
 
         let solution = solver.solve(&config).unwrap();
 
-        assert_eq!(
-            *solution.costs.last().unwrap(),
-            initial_time + MyDuration(Duration::seconds(24))
-        );
+        assert_eq!(*solution.costs.last().unwrap(), OrderedFloat(24.0));
     }
 }

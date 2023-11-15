@@ -194,18 +194,18 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use chrono::{Duration, Local, TimeZone};
+    use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, Heuristic, MyDuration, MyTime, ReverseResumableAStar, SimpleHeuristic,
-        SimpleState, SimpleWorld, Task,
+        Graph, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic, SimpleState,
+        SimpleWorld, Task,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f64, y as f64), 1.0);
+                graph.add_node((x as f32, y as f32), 1.0);
             }
         }
         for x in 0..size {
@@ -236,7 +236,7 @@ mod tests {
         let task = Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(0))),
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
-            MyTime(Local.with_ymd_and_hms(2000, 01, 01, 10, 0, 0).unwrap()),
+            OrderedFloat(0.0),
         ));
         let heuristic = ReverseResumableAStar::new(
             transition_system.clone(),
@@ -250,7 +250,7 @@ mod tests {
                     heuristic
                         .get_heuristic(Arc::new(SimpleState(GraphNodeId(x + y * size))))
                         .unwrap(),
-                    MyDuration(Duration::seconds(((size - x - 1) + (size - y - 1)) as i64))
+                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
             }
         }
