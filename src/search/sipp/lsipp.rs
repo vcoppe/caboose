@@ -397,7 +397,10 @@ mod tests {
                     Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),
-                        Arc::new(SimpleHeuristic::new(transition_system.clone(), task)),
+                        Arc::new(SimpleHeuristic::new(
+                            transition_system.clone(),
+                            Arc::new(task.reverse()),
+                        )),
                     )),
                 );
                 assert_eq!(
@@ -438,7 +441,10 @@ mod tests {
             Arc::new(ReverseResumableAStar::new(
                 transition_system.clone(),
                 task.clone(),
-                Arc::new(SimpleHeuristic::new(transition_system.clone(), task)),
+                Arc::new(SimpleHeuristic::new(
+                    transition_system.clone(),
+                    Arc::new(task.reverse()),
+                )),
             )),
         );
         assert_eq!(

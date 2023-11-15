@@ -84,7 +84,10 @@ fn get_model() -> Model {
                 Arc::new(ReverseResumableAStar::new(
                     transition_system.clone(),
                     t.clone(),
-                    Arc::new(SimpleHeuristic::new(transition_system.clone(), t.clone())),
+                    Arc::new(SimpleHeuristic::new(
+                        transition_system.clone(),
+                        Arc::new(t.reverse()),
+                    )),
                 ))
             })
             .collect(),

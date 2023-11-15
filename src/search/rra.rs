@@ -236,7 +236,10 @@ mod tests {
         let heuristic = ReverseResumableAStar::new(
             transition_system.clone(),
             task.clone(),
-            Arc::new(SimpleHeuristic::new(transition_system, task)),
+            Arc::new(SimpleHeuristic::new(
+                transition_system,
+                Arc::new(task.reverse()),
+            )),
         );
 
         for x in 0..size {

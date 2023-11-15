@@ -50,6 +50,7 @@ impl<Action, X: FnMut(Action)> ActionCallback<Action> for X {
 pub struct Task<S, C>
 where
     S: State + Eq,
+    C: Copy,
 {
     pub initial_state: Arc<S>,
     pub goal_state: Arc<S>,
@@ -59,6 +60,7 @@ where
 impl<S, C> Task<S, C>
 where
     S: State + Eq,
+    C: Copy,
 {
     pub fn new(initial_state: Arc<S>, goal_state: Arc<S>, initial_cost: C) -> Self {
         Self {
@@ -70,6 +72,14 @@ where
 
     pub fn is_goal_state(&self, state: &S) -> bool {
         state.is_equivalent(&self.goal_state)
+    }
+
+    pub fn reverse(&self) -> Self {
+        Self {
+            initial_state: self.goal_state.clone(),
+            goal_state: self.initial_state.clone(),
+            initial_cost: self.initial_cost,
+        }
     }
 }
 
