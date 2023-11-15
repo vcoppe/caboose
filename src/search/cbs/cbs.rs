@@ -519,10 +519,11 @@ where
                     *solution1.costs.last().unwrap() - *solutions[agents[0]].costs.last().unwrap();
                 let overcost2 =
                     *solution2.costs.last().unwrap() - *solutions[agents[1]].costs.last().unwrap();
-                conflict.overcost = overcost1.min(overcost2);
                 if overcost1 > DC::default() && overcost2 > DC::default() {
+                    conflict.overcost = overcost1.min(overcost2);
                     conflict.type_ = ConflictType::Cardinal;
                 } else if overcost1 > DC::default() || overcost2 > DC::default() {
+                    conflict.overcost = overcost1.max(overcost2);
                     conflict.type_ = ConflictType::SemiCardinal;
                 } else {
                     conflict.type_ = ConflictType::NonCardinal;
