@@ -683,12 +683,12 @@ mod tests {
         ];
 
         let mut constraints = ConstraintSet::default();
-        constraints.add(Arc::new(Constraint::new_state_constraint(
+        constraints.add(&Arc::new(Constraint::new_state_constraint(
             0,
             state.clone(),
             Interval::new(times[0], times[1]),
         )));
-        constraints.add(Arc::new(Constraint::new_state_constraint(
+        constraints.add(&Arc::new(Constraint::new_state_constraint(
             0,
             state.clone(),
             Interval::new(times[2], times[3]),
@@ -737,12 +737,12 @@ mod tests {
                     SimpleState(GraphNodeId(l + size * k)),
                     SimpleState(GraphNodeId(k + size * l)),
                 ] {
-                    constraints.add(Arc::new(Constraint::new_state_constraint(
+                    constraints.add(&Arc::new(Constraint::new_state_constraint(
                         0,
                         state.clone(),
                         Interval::new(times[0], times[1]),
                     )));
-                    constraints.add(Arc::new(Constraint::new_state_constraint(
+                    constraints.add(&Arc::new(Constraint::new_state_constraint(
                         0,
                         state.clone(),
                         Interval::new(times[2], times[3]),

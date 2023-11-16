@@ -57,16 +57,7 @@ fn get_model() -> Model {
     let transition_system = Arc::new(SimpleWorld::new(graph.clone()));
 
     let mut tasks = vec![];
-    for (from, to) in vec![
-        (0, 9),
-        (9, 0),
-        (1, 8),
-        (8, 1),
-        (2, 7),
-        (7, 2),
-        (3, 6),
-        //(6, 3),
-    ] {
+    for (from, to) in vec![(0, 9), (9, 0), (1, 8), (8, 1), (2, 7), (7, 2), (3, 6)] {
         tasks.push(Arc::new(Task::new(
             SimpleState(GraphNodeId(from)),
             SimpleState(GraphNodeId(to)),

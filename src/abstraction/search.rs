@@ -437,8 +437,8 @@ where
     S: State + Eq + Hash + Clone,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
-    pub state_constraints: FxHashMap<S, Vec<Arc<Constraint<S, C>>>>,
-    pub action_constraints: FxHashMap<(S, S), Vec<Arc<Constraint<S, C>>>>,
+    pub state_constraints: FxHashMap<S, Vec<Constraint<S, C>>>,
+    pub action_constraints: FxHashMap<(S, S), Vec<Constraint<S, C>>>,
 }
 
 impl<S, C> Default for ConstraintSet<S, C>
@@ -459,13 +459,13 @@ where
     S: State + Eq + Hash + Clone,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
-    pub fn add(&mut self, constraint: Arc<Constraint<S, C>>) {
+    pub fn add(&mut self, constraint: &Arc<Constraint<S, C>>) {
         match constraint.type_ {
             ConstraintType::State => {
                 self.state_constraints
                     .entry(constraint.state.clone())
                     .or_default()
-                    .push(constraint);
+                    .push(constraint.as_ref().clone());
             }
             ConstraintType::Action => {
                 self.action_constraints
@@ -474,16 +474,16 @@ where
                         constraint.next.as_ref().unwrap().clone(),
                     ))
                     .or_default()
-                    .push(constraint);
+                    .push(constraint.as_ref().clone());
             }
         }
     }
 
-    pub fn get_state_constraints(&self, state: &S) -> Option<&Vec<Arc<Constraint<S, C>>>> {
+    pub fn get_state_constraints(&self, state: &S) -> Option<&Vec<Constraint<S, C>>> {
         self.state_constraints.get(state)
     }
 
-    pub fn get_action_constraints(&self, from: &S, to: &S) -> Option<&Vec<Arc<Constraint<S, C>>>> {
+    pub fn get_action_constraints(&self, from: &S, to: &S) -> Option<&Vec<Constraint<S, C>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 
@@ -501,14 +501,8 @@ where
                 while j < constraints.len()
                     && constraint.interval.overlaps(&constraints[j].interval)
                 {
-                    constraint = Arc::new(Constraint::new_state_constraint(
-                        constraint.agent,
-                        constraint.state.clone(),
-                        Interval::new(
-                            constraint.interval.start,
-                            constraint.interval.end.max(constraints[j].interval.end),
-                        ),
-                    ));
+                    constraint.interval.end =
+                        constraint.interval.end.max(constraints[j].interval.end);
                     j += 1;
                 }
 
@@ -532,15 +526,8 @@ where
                 while j < constraints.len()
                     && constraint.interval.overlaps(&constraints[j].interval)
                 {
-                    constraint = Arc::new(Constraint::new_action_constraint(
-                        constraint.agent,
-                        constraint.state.clone(),
-                        constraint.next.as_ref().unwrap().clone(),
-                        Interval::new(
-                            constraint.interval.start,
-                            constraint.interval.end.max(constraints[j].interval.end),
-                        ),
-                    ));
+                    constraint.interval.end =
+                        constraint.interval.end.max(constraints[j].interval.end);
                     j += 1;
                 }
 

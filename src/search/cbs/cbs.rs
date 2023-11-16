@@ -672,7 +672,7 @@ where
         loop {
             if let Some(constraint) = &current.constraint {
                 if constraint.agent == agent {
-                    constraints.add(constraint.clone());
+                    constraints.add(&constraint);
                 }
             }
             if let Some(T2(from, to)) = &current.landmark {
@@ -706,7 +706,7 @@ where
         loop {
             if let Some(constraint) = &current.constraint {
                 if constraint.agent == agent {
-                    constraints.add(constraint.clone());
+                    constraints.add(&constraint);
                 }
             }
             if let Some(T2(from, to)) = &current.landmark {
