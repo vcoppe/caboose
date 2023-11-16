@@ -38,6 +38,29 @@ impl SimpleWorld {
         let edge = self.graph.get_edge(edge);
         self.time_between(edge.from, edge.to)
     }
+
+    pub fn get_center_and_vel(
+        &self,
+        m: &Move<SimpleState, GraphEdgeId, MyTime>,
+        initial_time: &MyTime,
+    ) -> (Point2<f32>, Vector2<f32>) {
+        let interval = &m.interval;
+        let from = self.graph.get_node(m.from.0).position;
+        let to = self.graph.get_node(m.to.0).position;
+
+        let d_x = to.0 - from.0;
+        let d_y = to.1 - from.1;
+        let d_t = interval.end.0 - interval.start.0;
+        let vel_x = d_x / d_t;
+        let vel_y = d_y / d_t;
+
+        let pre_d_t = initial_time.0 - interval.start.0;
+
+        let center_x = from.0 + vel_x * pre_d_t;
+        let center_y = from.1 + vel_y * pre_d_t;
+
+        (Point2::new(center_x, center_y), Vector2::new(vel_x, vel_y))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -82,38 +105,16 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld 
         let initial_time = moves[0].interval.start.max(moves[1].interval.start);
         let max_time = moves[0].interval.end.min(moves[1].interval.end) - initial_time;
 
-        let mut centers = vec![];
-        let mut vels = vec![];
-        let mut balls = vec![];
-
-        for i in 0..=1 {
-            let interval = &moves[i].interval;
-            let from = self.graph.get_node(moves[i].from.0).position;
-            let to = self.graph.get_node(moves[i].to.0).position;
-
-            let d_x = to.0 - from.0;
-            let d_y = to.1 - from.1;
-            let d_t = interval.end.0 - interval.start.0;
-            let vel_x = d_x / d_t;
-            let vel_y = d_y / d_t;
-
-            let pre_d_t = initial_time.0 - interval.start.0;
-
-            let center_x = from.0 + vel_x * pre_d_t;
-            let center_y = from.1 + vel_y * pre_d_t;
-
-            centers.push(Point2::new(center_x, center_y));
-            vels.push(Vector2::new(vel_x, vel_y));
-            balls.push(&Self::BALL);
-        }
+        let (center1, vel1) = self.get_center_and_vel(moves[0], &initial_time);
+        let (center2, vel2) = self.get_center_and_vel(moves[1], &initial_time);
 
         let toi = query::time_of_impact_ball_ball(
-            &centers[0],
-            &vels[0],
-            &balls[0],
-            &centers[1],
-            &vels[1],
-            &balls[1],
+            &center1,
+            &vel1,
+            &Self::BALL,
+            &center2,
+            &vel2,
+            &Self::BALL,
             max_time.0,
             0.0,
         );
