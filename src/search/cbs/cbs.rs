@@ -13,7 +13,7 @@ use tuple::{A2, T2};
 
 use crate::{
     Conflict, ConflictType, Constraint, ConstraintSet, ConstraintType, Heuristic, Interval,
-    LSippConfig, LandmarkSet, LimitValues, Move, ReverseResumableAStar,
+    LSippConfig, LSippStats, LandmarkSet, LimitValues, Move, ReverseResumableAStar, RraStats,
     SafeIntervalPathPlanningWithLandmarks, SippState, Solution, State, Task, TransitionSystem,
 };
 
@@ -106,8 +106,6 @@ where
                 config.pivots.clone(),
                 config.heuristic_to_pivots.clone(),
             );
-
-            self.stats.sipp_runs += 1;
 
             if let Some(solution) = self.lsipp.solve(&config) {
                 root.total_cost =
@@ -235,7 +233,7 @@ where
             }
         }
 
-        self.stats.cbs_expanded += 1;
+        self.stats.expanded += 1;
 
         valid_successors
     }
@@ -293,8 +291,6 @@ where
                 config.heuristic_to_pivots.clone(),
             )),
         ];
-
-        self.stats.sipp_runs += 2;
 
         (successors, solutions, constraints)
     }
@@ -536,8 +532,15 @@ where
         None
     }
 
-    pub fn get_stats(&self) -> &CbsStats {
-        &self.stats
+    /// Returns the statistics of the search algorithm.
+    pub fn get_stats(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) -> CbsStats {
+        self.stats.lsipp_stats = self.lsipp.get_stats();
+        self.stats.rra_stats = config
+            .heuristic_to_pivots
+            .iter()
+            .map(|h| h.get_stats())
+            .sum();
+        self.stats
     }
 }
 
@@ -864,19 +867,11 @@ where
 }
 
 /// Statistics of the Conflict-Based Search algorithm.
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct CbsStats {
-    pub cbs_expanded: usize,
-    pub sipp_runs: usize,
-}
-
-impl Default for CbsStats {
-    fn default() -> Self {
-        Self {
-            cbs_expanded: 0,
-            sipp_runs: 0,
-        }
-    }
+    pub expanded: usize,
+    pub lsipp_stats: LSippStats,
+    pub rra_stats: RraStats,
 }
 
 #[cfg(test)]
@@ -895,23 +890,23 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32), 1.0);
+                graph.add_node((x as f32, y as f32));
             }
         }
         for x in 0..size {
             for y in 0..size {
                 let node_id = GraphNodeId(x + y * size);
                 if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
                 }
                 if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
                 }
                 if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
                 }
                 if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
                 }
             }
         }

@@ -6,14 +6,12 @@ pub struct GraphEdgeId(pub usize);
 
 pub struct GraphNode {
     pub position: (f32, f32),
-    max_turn_distance: f32,
 }
 
 pub struct GraphEdge {
     pub from: GraphNodeId,
     pub to: GraphNodeId,
     pub distance: f32,
-    max_speed: f32,
 }
 
 /// Definition a weighted directed graph.
@@ -34,31 +32,17 @@ impl Graph {
         }
     }
 
-    pub fn add_node(&mut self, position: (f32, f32), max_turn_distance: f32) -> GraphNodeId {
+    pub fn add_node(&mut self, position: (f32, f32)) -> GraphNodeId {
         let id = GraphNodeId(self.nodes.len());
-        self.nodes.push(GraphNode {
-            position,
-            max_turn_distance,
-        });
+        self.nodes.push(GraphNode { position });
         self.edges_in.push(Vec::new());
         self.edges_out.push(Vec::new());
         id
     }
 
-    pub fn add_edge(
-        &mut self,
-        from: GraphNodeId,
-        to: GraphNodeId,
-        distance: f32,
-        max_speed: f32,
-    ) -> GraphEdgeId {
+    pub fn add_edge(&mut self, from: GraphNodeId, to: GraphNodeId, distance: f32) -> GraphEdgeId {
         let id = GraphEdgeId(self.edges.len());
-        self.edges.push(GraphEdge {
-            from,
-            to,
-            distance,
-            max_speed,
-        });
+        self.edges.push(GraphEdge { from, to, distance });
         self.edges_in[to.0].push(id);
         self.edges_out[from.0].push(id);
         id

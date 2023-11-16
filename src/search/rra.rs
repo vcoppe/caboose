@@ -6,6 +6,7 @@ use std::{
     },
     fmt::Debug,
     hash::Hash,
+    iter::Sum,
     marker::PhantomData,
     ops::Add,
     ops::Sub,
@@ -45,6 +46,7 @@ where
     queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
     distance: RwLock<FxHashMap<Arc<S>, C>>,
     closed: RwLock<FxHashSet<Arc<S>>>,
+    stats: RwLock<RraStats>,
     _phantom: PhantomData<A>,
 }
 
@@ -94,6 +96,7 @@ where
             queue: Mutex::new(BinaryHeap::new()),
             distance: RwLock::new(FxHashMap::default()),
             closed: RwLock::new(FxHashSet::default()),
+            stats: RwLock::new(RraStats::default()),
             _phantom: PhantomData::default(),
         };
         rra.init();
@@ -119,14 +122,18 @@ where
     fn find_path(&self, state: &Arc<S>) -> Option<DC> {
         if self.closed.read().contains(state) {
             // The distance has already been computed
+            self.stats.write().cached_query += 1;
             return Some(self.distance.read()[state] - self.task.initial_cost);
         }
 
         let mut queue = self.queue.lock(); // Lock the queue to avoid concurrent executions of the algorithm
         if self.closed.read().contains(state) {
+            self.stats.write().cached_query += 1;
             // Check if the distance has been computed while waiting for the lock
             return Some(self.distance.read()[state] - self.task.initial_cost);
         }
+
+        self.stats.write().new_query += 1;
 
         loop {
             let current = queue.peek();
@@ -188,9 +195,34 @@ where
                     }
                 }
             }
+
+            self.stats.write().expanded += 1;
         }
 
         None
+    }
+
+    /// Returns the statistics of the search algorithm.
+    pub fn get_stats(&self) -> RraStats {
+        self.stats.read().clone()
+    }
+}
+
+/// Statistics of the Reverse Resumable A* algorithm.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RraStats {
+    pub new_query: usize,
+    pub cached_query: usize,
+    pub expanded: usize,
+}
+
+impl Sum for RraStats {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::default(), |a, b| Self {
+            new_query: a.new_query + b.new_query,
+            cached_query: a.cached_query + b.cached_query,
+            expanded: a.expanded + b.expanded,
+        })
     }
 }
 
@@ -201,31 +233,31 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, Heuristic, ReverseResumableAStar, SimpleHeuristic, SimpleState,
-        SimpleWorld, Task,
+        Graph, GraphNodeId, Heuristic, ReverseResumableAStar, RraStats, SimpleHeuristic,
+        SimpleState, SimpleWorld, Task,
     };
 
     fn simple_graph(size: usize) -> Arc<Graph> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32), 1.0);
+                graph.add_node((x as f32, y as f32));
             }
         }
         for x in 0..size {
             for y in 0..size {
                 let node_id = GraphNodeId(x + y * size);
                 if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
                 }
                 if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
                 }
                 if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
                 }
                 if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
                 }
             }
         }
@@ -261,5 +293,43 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_caching() {
+        let size = 10;
+        let graph = simple_graph(size);
+        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let task = Arc::new(Task::new(
+            Arc::new(SimpleState(GraphNodeId(0))),
+            Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+            OrderedFloat(0.0),
+        ));
+        let heuristic = ReverseResumableAStar::new(
+            transition_system.clone(),
+            task.clone(),
+            Arc::new(SimpleHeuristic::new(
+                transition_system,
+                Arc::new(task.reverse()),
+            )),
+        );
+        let initial = heuristic.get_stats();
+        heuristic.get_heuristic(&Arc::new(SimpleState(GraphNodeId(0))));
+        let after_one_query = heuristic.get_stats();
+        heuristic.get_heuristic(&Arc::new(SimpleState(GraphNodeId(0))));
+        let after_same_query = heuristic.get_stats();
+        assert_eq!(
+            initial,
+            RraStats {
+                new_query: 0,
+                cached_query: 0,
+                expanded: 0
+            }
+        );
+        assert_eq!(after_one_query.new_query, 1);
+        assert_eq!(after_one_query.cached_query, 0);
+        assert_eq!(after_same_query.new_query, 1);
+        assert_eq!(after_same_query.cached_query, 1);
+        assert_eq!(after_same_query.expanded, after_one_query.expanded);
     }
 }

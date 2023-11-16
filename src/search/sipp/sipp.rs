@@ -45,6 +45,7 @@ where
     distance: FxHashMap<Arc<SippState<S, C>>, C>,
     closed: FxHashSet<Arc<SippState<S, C>>>,
     parent: FxHashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
+    stats: SippStats,
     _phantom: PhantomData<(A, H)>,
 }
 
@@ -74,6 +75,7 @@ where
             distance: FxHashMap::default(),
             closed: FxHashSet::default(),
             parent: FxHashMap::default(),
+            stats: SippStats::default(),
             _phantom: PhantomData::default(),
         }
     }
@@ -168,6 +170,8 @@ where
                 .insert(initial_node.state.clone(), initial_node.cost);
             self.queue.push(Reverse(initial_node));
         }
+
+        self.stats.searches += 1;
     }
 
     /// Finds all shortest paths from the initial states to any reachable safe interval
@@ -198,6 +202,7 @@ where
             }
 
             self.closed.insert(current.state.clone()); // Mark the state as closed because it has been expanded
+            self.stats.expanded += 1;
         }
 
         goals
@@ -403,6 +408,11 @@ where
 
         solution
     }
+
+    /// Returns the statistics of the search algorithm.
+    pub fn get_stats(&self) -> SippStats {
+        self.stats
+    }
 }
 
 /// Input configuration for the Safe Interval Path Planning algorithm.
@@ -586,6 +596,13 @@ where
     }
 }
 
+/// Statistics of the Safe Interval Path Planning algorithm.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SippStats {
+    pub searches: usize,
+    pub expanded: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -603,23 +620,23 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32), 1.0);
+                graph.add_node((x as f32, y as f32));
             }
         }
         for x in 0..size {
             for y in 0..size {
                 let node_id = GraphNodeId(x + y * size);
                 if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
                 }
                 if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
                 }
                 if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
                 }
                 if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
                 }
             }
         }
@@ -653,10 +670,16 @@ mod tests {
                         )),
                     )),
                 );
+                let before = solver.get_stats();
+                let solution = solver.solve(&config).unwrap();
+                let after = solver.get_stats();
                 assert_eq!(
-                    *solver.solve(&config).unwrap().costs.last().unwrap(),
+                    *solution.costs.last().unwrap(),
                     OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
+                assert_eq!(after.searches, before.searches + 1);
+                // Check that the perfect heuristic works
+                assert_eq!(after.expanded - before.expanded, solution.actions.len());
             }
         }
     }

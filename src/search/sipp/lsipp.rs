@@ -10,8 +10,8 @@ use fxhash::FxHashMap;
 
 use crate::{
     Action, ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval,
-    LandmarkSet, LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippTask, Solution,
-    State, Task, TransitionSystem,
+    LandmarkSet, LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippStats, SippTask,
+    Solution, State, Task, TransitionSystem,
 };
 
 /// Implementation of Safe Interval Path Planning algorithm that supports landmarks
@@ -37,6 +37,7 @@ where
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
     parent: FxHashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
+    stats: LSippStats,
 }
 
 impl<TS, S, A, C, DC, H> SafeIntervalPathPlanningWithLandmarks<TS, S, A, C, DC, H>
@@ -63,12 +64,15 @@ where
             sipp: SafeIntervalPathPlanning::new(transition_system),
             parent: FxHashMap::default(),
             solutions: vec![],
+            stats: LSippStats::default(),
         }
     }
 
     fn init(&mut self) {
         self.solutions.clear();
         self.parent.clear();
+
+        self.stats.searches += 1;
     }
 
     /// Attempts to solve the given configuration, and returns the solution if any.
@@ -259,6 +263,12 @@ where
             config.heuristic_to_pivots.clone(),
         ))
     }
+
+    /// Returns the statistics of the search algorithm.
+    pub fn get_stats(&mut self) -> LSippStats {
+        self.stats.sipp_stats = self.sipp.get_stats();
+        self.stats
+    }
 }
 
 /// Input configuration for the Safe Interval Path Planning algorithm with landmarks.
@@ -338,6 +348,13 @@ where
     }
 }
 
+/// Statistics of the Safe Interval Path Planning algorithm with landmarks.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LSippStats {
+    pub searches: usize,
+    pub sipp_stats: SippStats,
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -353,23 +370,23 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32), 1.0);
+                graph.add_node((x as f32, y as f32));
             }
         }
         for x in 0..size {
             for y in 0..size {
                 let node_id = GraphNodeId(x + y * size);
                 if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
                 }
                 if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
                 }
                 if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
                 }
                 if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0, 1.0);
+                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
                 }
             }
         }
@@ -390,7 +407,7 @@ mod tests {
                     Arc::new(SimpleState(GraphNodeId(size * size - 1))),
                     OrderedFloat(0.0),
                 ));
-                let mut config = LSippConfig::new(
+                let config = LSippConfig::new(
                     task.clone(),
                     Default::default(),
                     Default::default(),
@@ -403,10 +420,15 @@ mod tests {
                         )),
                     )),
                 );
+                let before = solver.get_stats();
+                let solution = solver.solve(&config).unwrap();
+                let after = solver.get_stats();
                 assert_eq!(
-                    *solver.solve(&mut config).unwrap().costs.last().unwrap(),
+                    *solution.costs.last().unwrap(),
                     OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
+                assert_eq!(after.searches, before.searches + 1);
+                assert_eq!(after.sipp_stats.searches, before.sipp_stats.searches + 1);
             }
         }
     }
@@ -423,7 +445,7 @@ mod tests {
             Arc::new(SimpleState(GraphNodeId(size * size - 1))),
             OrderedFloat(0.0),
         ));
-        let mut config = LSippConfig::new(
+        let config = LSippConfig::new(
             task.clone(),
             Default::default(),
             Arc::new(vec![
@@ -447,9 +469,14 @@ mod tests {
                 )),
             )),
         );
+        let before = solver.get_stats();
+        let solution = solver.solve(&config).unwrap();
+        let after = solver.get_stats();
         assert_eq!(
-            *solver.solve(&mut config).unwrap().costs.last().unwrap(),
+            *solution.costs.last().unwrap(),
             OrderedFloat((4 * (size - 1)) as f32)
         );
+        assert_eq!(after.searches, before.searches + 1);
+        assert_eq!(after.sipp_stats.searches, before.sipp_stats.searches + 3);
     }
 }

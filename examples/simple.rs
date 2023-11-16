@@ -44,7 +44,7 @@ fn main() {
         } else {
             println!("No solution found");
         }
-        println!("{:?}", model.cbs.get_stats());
+        println!("{:?}", model.cbs.get_stats(&model.config));
         println!("Time elapsed: {:?}", duration);
     }
 }
@@ -64,8 +64,8 @@ fn get_model() -> Model {
         (8, 1),
         (2, 7),
         (7, 2),
-        // (3, 6),
-        // (6, 3),
+        (3, 6),
+        //(6, 3),
     ] {
         tasks.push(Arc::new(Task::new(
             Arc::new(SimpleState(GraphNodeId(from))),
@@ -428,23 +428,23 @@ fn simple_graph(size: usize) -> Arc<Graph> {
     let mut graph = Graph::new();
     for x in 0..size {
         for y in 0..size {
-            graph.add_node((x as f32, y as f32), 1.0);
+            graph.add_node((x as f32, y as f32));
         }
     }
     for x in 0..size {
         for y in 0..size {
             let node_id = GraphNodeId(x + y * size);
             if x > 0 {
-                graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0, 1.0);
+                graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
             }
             if y > 0 {
-                graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0, 1.0);
+                graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
             }
             if x < size - 1 {
-                graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0, 1.0);
+                graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
             }
             if y < size - 1 {
-                graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0, 1.0);
+                graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
             }
         }
     }
