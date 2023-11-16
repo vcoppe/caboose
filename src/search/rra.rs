@@ -14,7 +14,7 @@ use std::{
 };
 
 use fxhash::{FxHashMap, FxHashSet};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 
 use crate::{abstraction::TransitionSystem, Heuristic, Task};
 use crate::{LimitValues, SearchNode, State};
@@ -43,10 +43,7 @@ where
     task: Arc<Task<S, C>>,
     /// The heuristic must be an estimate of the distance to the start state
     heuristic: Arc<H>,
-    queue: Mutex<BinaryHeap<Reverse<SearchNode<S, C, DC>>>>,
-    distance: RwLock<FxHashMap<Arc<S>, C>>,
-    closed: RwLock<FxHashSet<Arc<S>>>,
-    stats: RwLock<RraStats>,
+    data: Mutex<RraData<S, C, DC>>,
     _phantom: PhantomData<A>,
 }
 
@@ -93,10 +90,7 @@ where
             transition_system: transition_system.clone(),
             task: task.clone(),
             heuristic,
-            queue: Mutex::new(BinaryHeap::new()),
-            distance: RwLock::new(FxHashMap::default()),
-            closed: RwLock::new(FxHashSet::default()),
-            stats: RwLock::new(RraStats::default()),
+            data: Mutex::new(RraData::default()),
             _phantom: PhantomData::default(),
         };
         rra.init();
@@ -111,52 +105,46 @@ where
             heuristic: C::default() - C::default(),
         };
 
-        self.distance
-            .write()
+        let mut data = self.data.lock();
+        data.distance
             .insert(goal_node.state.clone(), goal_node.cost);
-        self.queue.get_mut().push(Reverse(goal_node));
+        data.queue.push(Reverse(goal_node));
     }
 
     /// Computes the shortest path between the given state and the goal state,
     /// or returns directly if it has already been computed.
     fn find_path(&self, state: &Arc<S>) -> Option<DC> {
-        if self.closed.read().contains(state) {
+        let mut data = self.data.lock();
+
+        if data.closed.contains(state) {
             // The distance has already been computed
-            self.stats.write().cached_query += 1;
-            return Some(self.distance.read()[state] - self.task.initial_cost);
+            data.stats.cached_query += 1;
+            return Some(data.distance[state] - self.task.initial_cost);
         }
 
-        let mut queue = self.queue.lock(); // Lock the queue to avoid concurrent executions of the algorithm
-        if self.closed.read().contains(state) {
-            self.stats.write().cached_query += 1;
-            // Check if the distance has been computed while waiting for the lock
-            return Some(self.distance.read()[state] - self.task.initial_cost);
-        }
-
-        self.stats.write().new_query += 1;
+        data.stats.new_query += 1;
 
         loop {
-            let current = queue.peek();
+            let current = data.queue.pop();
             if current.is_none() {
                 break;
             }
 
-            let current = &current.unwrap().0;
+            let current = current.unwrap().0;
+            data.closed.insert(current.state.clone()); // Mark the state as closed because the optimal distance has been found
 
-            self.closed.write().insert(current.state.clone()); // Mark the state as closed because the optimal distance has been found
-
-            if current.cost > self.distance.read()[&current.state] {
+            if current.cost > data.distance[&current.state] {
                 // A better path has already been found
                 continue;
             }
 
             if current.state == *state {
                 // The optimal distance has been found
-                return Some(current.cost - self.task.initial_cost);
+                let cost = current.cost - self.task.initial_cost;
+                // Re-insert the current node because it has not been expanded
+                data.queue.push(Reverse(current));
+                return Some(cost);
             }
-
-            // Only pop the current node if we are really going to expand it
-            let current = queue.pop().unwrap().0;
 
             // Expand the current state and enqueue its successors if a better path has been found
             for action in self.transition_system.reverse_actions_from(&current.state) {
@@ -170,7 +158,7 @@ where
                         .transition_system
                         .reverse_transition_cost(&current.state, &action);
 
-                let improved = match self.distance.write().entry(successor_state.clone()) {
+                let improved = match data.distance.entry(successor_state.clone()) {
                     Occupied(mut e) => {
                         if successor_cost < *e.get() {
                             *e.get_mut() = successor_cost;
@@ -187,7 +175,7 @@ where
 
                 if improved {
                     if let Some(heuristic) = self.heuristic.get_heuristic(&successor_state) {
-                        queue.push(Reverse(SearchNode {
+                        data.queue.push(Reverse(SearchNode {
                             state: successor_state,
                             cost: successor_cost,
                             heuristic,
@@ -196,7 +184,7 @@ where
                 }
             }
 
-            self.stats.write().expanded += 1;
+            data.stats.expanded += 1;
         }
 
         None
@@ -204,7 +192,34 @@ where
 
     /// Returns the statistics of the search algorithm.
     pub fn get_stats(&self) -> RraStats {
-        self.stats.read().clone()
+        self.data.lock().stats
+    }
+}
+
+/// Protected data used by the Reverse Resumable A* algorithm.
+pub struct RraData<S, C, DC>
+where
+    C: Copy + Ord + Add<DC, Output = C>,
+    DC: Copy,
+{
+    queue: BinaryHeap<Reverse<SearchNode<S, C, DC>>>,
+    distance: FxHashMap<Arc<S>, C>,
+    closed: FxHashSet<Arc<S>>,
+    stats: RraStats,
+}
+
+impl<S, C, DC> Default for RraData<S, C, DC>
+where
+    C: Copy + Ord + Add<DC, Output = C>,
+    DC: Copy,
+{
+    fn default() -> Self {
+        Self {
+            queue: BinaryHeap::new(),
+            distance: FxHashMap::default(),
+            closed: FxHashSet::default(),
+            stats: RraStats::default(),
+        }
     }
 }
 
