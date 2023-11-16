@@ -3,6 +3,7 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
+    rc::Rc,
     sync::Arc,
 };
 
@@ -19,7 +20,7 @@ use crate::{
 pub struct SafeIntervalPathPlanningWithLandmarks<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Debug + Copy,
     C: Hash
         + Eq
@@ -35,15 +36,15 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
-    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    parent: FxHashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
+    solutions: Vec<Solution<Rc<SippState<S, C>>, A, C, DC>>,
+    parent: FxHashMap<(Rc<SippState<S, C>>, C), (Action<A, DC>, Rc<SippState<S, C>>, C)>,
     stats: LSippStats,
 }
 
 impl<TS, S, A, C, DC, H> SafeIntervalPathPlanningWithLandmarks<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Debug + Copy,
     C: Hash
         + Eq
@@ -84,12 +85,14 @@ where
 
         if config.landmarks.is_empty() {
             // No landmarks, just solve the task with SIPP
-            self.sipp.solve(&mut SippConfig::new(
-                config.task.clone(),
-                Default::default(),
-                config.constraints.clone(),
-                self.get_heuristic(config, config.task.clone()),
-            ))
+            self.sipp
+                .solve(&mut SippConfig::new(
+                    config.task.clone(),
+                    Default::default(),
+                    config.constraints.clone(),
+                    self.get_heuristic(config, config.task.clone()),
+                ))
+                .map(Self::map_to_arcs)
         } else {
             // Solve the task with landmarks
             self.to_first_landmark(&config);
@@ -136,7 +139,7 @@ where
                 config.task.initial_cost,
             ));
             let config = GeneralizedSippConfig::new(
-                Arc::new(SippTask::new(
+                SippTask::new(
                     self.solutions
                         .iter()
                         .map(|s| *s.costs.last().unwrap())
@@ -145,12 +148,12 @@ where
                         .iter()
                         .map(|s| s.states.last().unwrap().clone())
                         .collect(),
-                    Arc::new(SippState {
+                    SippState {
                         safe_interval: landmark.interval.clone(),
                         internal_state: landmark.state.clone(),
-                    }),
+                    },
                     task.clone(),
-                )),
+                ),
                 config.constraints.clone(),
                 self.get_heuristic(config, task),
                 false,
@@ -170,7 +173,7 @@ where
             config.task.initial_cost,
         ));
         let config = GeneralizedSippConfig::new(
-            Arc::new(SippTask::new(
+            SippTask::new(
                 self.solutions
                     .iter()
                     .map(|s| *s.costs.last().unwrap())
@@ -179,12 +182,12 @@ where
                     .iter()
                     .map(|s| s.states.last().unwrap().clone())
                     .collect(),
-                Arc::new(SippState {
+                SippState {
                     safe_interval: Interval::default(),
                     internal_state: config.task.goal_state.clone(),
-                }),
+                },
                 task.clone(),
-            )),
+            ),
             config.constraints.clone(),
             self.get_heuristic(config, task),
             false, // we want a solution that reaches an [t,+inf) safe interval
@@ -249,7 +252,21 @@ where
         solution.costs.reverse();
         solution.actions.reverse();
 
-        Some(solution)
+        Some(Self::map_to_arcs(solution))
+    }
+
+    fn map_to_arcs(
+        solution: Solution<Rc<SippState<S, C>>, A, C, DC>,
+    ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
+        Solution {
+            states: solution
+                .states
+                .into_iter()
+                .map(|s| Arc::new(s.as_ref().clone()))
+                .collect::<Vec<_>>(),
+            costs: solution.costs,
+            actions: solution.actions,
+        }
     }
 
     fn get_heuristic(
@@ -275,7 +292,7 @@ where
 pub struct LSippConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Eq
         + PartialOrd
@@ -290,18 +307,18 @@ where
 {
     task: Arc<Task<S, C>>,
     constraints: Arc<ConstraintSet<S, C>>,
-    landmarks: Arc<LandmarkSet<S, C>>,
+    landmarks: LandmarkSet<S, C>,
     /// A set of pivot states.
-    pivots: Arc<Vec<Arc<S>>>,
+    pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
-    heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    heuristic_to_pivots: Arc<Vec<H>>,
     _phantom: PhantomData<(TS, A)>,
 }
 
 impl<TS, S, A, C, DC, H> LSippConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Eq
         + PartialOrd
@@ -317,8 +334,8 @@ where
     pub fn new(
         task: Arc<Task<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
-        landmarks: Arc<LandmarkSet<S, C>>,
-        heuristic: Arc<H>,
+        landmarks: LandmarkSet<S, C>,
+        heuristic: H,
     ) -> Self {
         Self {
             task: task.clone(),
@@ -333,9 +350,9 @@ where
     pub fn new_with_pivots(
         task: Arc<Task<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
-        landmarks: Arc<LandmarkSet<S, C>>,
-        pivots: Arc<Vec<Arc<S>>>,
-        heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+        landmarks: LandmarkSet<S, C>,
+        pivots: Arc<Vec<S>>,
+        heuristic_to_pivots: Arc<Vec<H>>,
     ) -> Self {
         Self {
             task,
@@ -403,22 +420,19 @@ mod tests {
         for x in 0..size {
             for y in 0..size {
                 let task = Arc::new(Task::new(
-                    Arc::new(SimpleState(GraphNodeId(x + size * y))),
-                    Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+                    SimpleState(GraphNodeId(x + size * y)),
+                    SimpleState(GraphNodeId(size * size - 1)),
                     OrderedFloat(0.0),
                 ));
                 let config = LSippConfig::new(
                     task.clone(),
                     Default::default(),
                     Default::default(),
-                    Arc::new(ReverseResumableAStar::new(
+                    ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),
-                        Arc::new(SimpleHeuristic::new(
-                            transition_system.clone(),
-                            Arc::new(task.reverse()),
-                        )),
-                    )),
+                        SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
+                    ),
                 );
                 let before = solver.get_stats();
                 let solution = solver.solve(&config).unwrap();
@@ -441,33 +455,30 @@ mod tests {
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
-            Arc::new(SimpleState(GraphNodeId(0))),
-            Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+            SimpleState(GraphNodeId(0)),
+            SimpleState(GraphNodeId(size * size - 1)),
             OrderedFloat(0.0),
         ));
         let config = LSippConfig::new(
             task.clone(),
             Default::default(),
-            Arc::new(vec![
+            vec![
                 Arc::new(Constraint::new_state_constraint(
                     0,
-                    Arc::new(SimpleState(GraphNodeId(size - 1))),
+                    SimpleState(GraphNodeId(size - 1)),
                     Interval::default(),
                 )),
                 Arc::new(Constraint::new_state_constraint(
                     0,
-                    Arc::new(SimpleState(GraphNodeId(size * (size - 1)))),
+                    SimpleState(GraphNodeId(size * (size - 1))),
                     Interval::default(),
                 )),
-            ]),
-            Arc::new(ReverseResumableAStar::new(
+            ],
+            ReverseResumableAStar::new(
                 transition_system.clone(),
                 task.clone(),
-                Arc::new(SimpleHeuristic::new(
-                    transition_system.clone(),
-                    Arc::new(task.reverse()),
-                )),
-            )),
+                SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
+            ),
         );
         let before = solver.get_stats();
         let solution = solver.solve(&config).unwrap();

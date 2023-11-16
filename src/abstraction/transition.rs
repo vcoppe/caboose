@@ -1,4 +1,4 @@
-use std::{slice, sync::Arc};
+use std::slice;
 
 use tuple::A2;
 
@@ -18,17 +18,17 @@ pub trait TransitionSystem<S, A, C, DC>
 where
     C: Ord + LimitValues,
 {
-    fn actions_from(&self, state: &Arc<S>) -> slice::Iter<A>;
+    fn actions_from(&self, state: &S) -> slice::Iter<A>;
 
-    fn transition(&self, state: &Arc<S>, action: &A) -> S;
-    fn transition_cost(&self, state: &Arc<S>, action: &A) -> DC;
+    fn transition(&self, state: &S, action: &A) -> S;
+    fn transition_cost(&self, state: &S, action: &A) -> DC;
 
-    fn reverse_actions_from(&self, state: &Arc<S>) -> slice::Iter<A>;
+    fn reverse_actions_from(&self, state: &S) -> slice::Iter<A>;
 
-    fn reverse_transition(&self, state: &Arc<S>, action: &A) -> S;
-    fn reverse_transition_cost(&self, state: &Arc<S>, action: &A) -> DC;
+    fn reverse_transition(&self, state: &S, action: &A) -> S;
+    fn reverse_transition_cost(&self, state: &S, action: &A) -> DC;
 
-    fn can_wait_at(&self, state: &Arc<S>) -> bool;
+    fn can_wait_at(&self, state: &S) -> bool;
 
     /// Returns true if the two moves lead to a collision.
     fn conflict(&self, moves: A2<&Move<S, A, C>>) -> bool;
@@ -49,20 +49,20 @@ impl<Action, X: FnMut(Action)> ActionCallback<Action> for X {
 /// be fed to a search algorithm.
 pub struct Task<S, C>
 where
-    S: State + Eq,
+    S: State + Eq + Clone,
     C: Copy,
 {
-    pub initial_state: Arc<S>,
-    pub goal_state: Arc<S>,
+    pub initial_state: S,
+    pub goal_state: S,
     pub initial_cost: C,
 }
 
 impl<S, C> Task<S, C>
 where
-    S: State + Eq,
+    S: State + Eq + Clone,
     C: Copy,
 {
-    pub fn new(initial_state: Arc<S>, goal_state: Arc<S>, initial_cost: C) -> Self {
+    pub fn new(initial_state: S, goal_state: S, initial_cost: C) -> Self {
         Self {
             initial_state,
             goal_state,
@@ -90,8 +90,8 @@ where
     C: Ord + LimitValues,
 {
     pub agent: usize,
-    pub from: Arc<S>,
-    pub to: Arc<S>,
+    pub from: S,
+    pub to: S,
     pub action: Option<A>,
     pub interval: Interval<C>,
 }
@@ -100,13 +100,7 @@ impl<S, A, C> Move<S, A, C>
 where
     C: Ord + LimitValues,
 {
-    pub fn new(
-        agent: usize,
-        from: Arc<S>,
-        to: Arc<S>,
-        action: Option<A>,
-        interval: Interval<C>,
-    ) -> Self {
+    pub fn new(agent: usize, from: S, to: S, action: Option<A>, interval: Interval<C>) -> Self {
         Self {
             agent,
             from,

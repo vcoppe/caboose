@@ -8,6 +8,7 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
+    rc::Rc,
     sync::Arc,
     vec,
 };
@@ -25,7 +26,7 @@ use crate::{
 pub struct SafeIntervalPathPlanning<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + Copy + Hash + Eq,
+    S: Debug + Hash + Eq + Clone,
     A: Copy,
     C: Hash
         + Eq
@@ -42,9 +43,9 @@ where
 {
     transition_system: Arc<TS>,
     queue: BinaryHeap<Reverse<SearchNode<SippState<S, C>, C, DC>>>,
-    distance: FxHashMap<Arc<SippState<S, C>>, C>,
-    closed: FxHashSet<Arc<SippState<S, C>>>,
-    parent: FxHashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
+    distance: FxHashMap<Rc<SippState<S, C>>, C>,
+    closed: FxHashSet<Rc<SippState<S, C>>>,
+    parent: FxHashMap<Rc<SippState<S, C>>, (Action<A, DC>, Rc<SippState<S, C>>)>,
     stats: SippStats,
     _phantom: PhantomData<(A, H)>,
 }
@@ -52,7 +53,7 @@ where
 impl<TS, S, A, C, DC, H> SafeIntervalPathPlanning<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Hash
         + Eq
@@ -87,11 +88,10 @@ where
         config: &SippConfig<TS, S, A, C, DC, H>,
         single_path: bool,
     ) -> Option<GeneralizedSippConfig<TS, S, A, C, DC, H>> {
-        let initial_state = config.task.initial_state.clone();
         let initial_time = config.task.initial_cost;
-        let goal_state = config.task.goal_state.clone();
 
-        let safe_intervals = Self::get_safe_intervals(&config.constraints, &initial_state);
+        let safe_intervals =
+            Self::get_safe_intervals(&config.constraints, &config.task.initial_state);
         let safe_interval = safe_intervals
             .iter()
             .find(|interval| initial_time >= interval.start && initial_time < interval.end);
@@ -100,22 +100,22 @@ where
             return None;
         }
 
-        let initial_state = Arc::new(SippState {
+        let initial_state = Rc::new(SippState {
             safe_interval: *safe_interval.unwrap(),
-            internal_state: initial_state,
+            internal_state: config.task.initial_state.clone(),
         });
 
-        let goal_state = Arc::new(SippState {
+        let goal_state = SippState {
             safe_interval: config.interval,
-            internal_state: goal_state,
-        });
+            internal_state: config.task.goal_state.clone(),
+        };
 
-        let sipp_task = Arc::new(SippTask::new(
+        let sipp_task = SippTask::new(
             vec![initial_time],
             vec![initial_state],
             goal_state,
             config.task.clone(),
-        ));
+        );
 
         Some(GeneralizedSippConfig::new(
             sipp_task,
@@ -129,7 +129,7 @@ where
     pub fn solve(
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    ) -> Option<Solution<Rc<SippState<S, C>>, A, C, DC>> {
         self.to_generalized(config, true)
             .map(|config| self.solve_generalized(&config).pop())
             .flatten()
@@ -138,7 +138,7 @@ where
     pub fn solve_generalized(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-    ) -> Vec<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    ) -> Vec<Solution<Rc<SippState<S, C>>, A, C, DC>> {
         self.init(config);
         self.find_paths(config)
             .iter()
@@ -197,9 +197,7 @@ where
             }
 
             // Expand the current state and enqueue its successors
-            for successor in self.get_successors(config, &current) {
-                self.queue.push(Reverse(successor));
-            }
+            self.expand(config, &current);
 
             self.closed.insert(current.state.clone()); // Mark the state as closed because it has been expanded
             self.stats.expanded += 1;
@@ -209,21 +207,18 @@ where
     }
 
     /// Generates the reachable successors of the given search node.
-    fn get_successors(
+    fn expand(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
         current: &SearchNode<SippState<S, C>, C, DC>,
-    ) -> Vec<SearchNode<SippState<S, C>, C, DC>> {
-        let mut successors = vec![];
-
+    ) {
         for action in self
             .transition_system
             .actions_from(&current.state.internal_state)
         {
-            let successor_state = Arc::new(
-                self.transition_system
-                    .transition(&current.state.internal_state, &action),
-            );
+            let successor_state = self
+                .transition_system
+                .transition(&current.state.internal_state, &action);
             let transition_cost = self
                 .transition_system
                 .transition_cost(&current.state.internal_state, &action);
@@ -248,7 +243,7 @@ where
             // Try to reach any of the safe intervals of the destination state
             // and add the corresponding successors to the queue if a better path has been found
             for safe_interval in
-                Self::get_safe_intervals(&config.constraints, &successor_state).iter()
+                Self::get_safe_intervals(&config.constraints, &successor_state).drain(..)
             {
                 let mut successor_cost = current.cost + transition_cost;
 
@@ -306,8 +301,8 @@ where
                     continue;
                 }
 
-                let successor_state = Arc::new(SippState {
-                    safe_interval: *safe_interval,
+                let successor_state = Rc::new(SippState {
+                    safe_interval,
                     internal_state: successor_state.clone(),
                 });
 
@@ -337,19 +332,14 @@ where
                         successor.state.clone(),
                         (Action::new(*action, transition_cost), current.state.clone()),
                     );
-                    successors.push(successor);
+                    self.queue.push(Reverse(successor))
                 }
             }
         }
-
-        successors
     }
 
     /// Returns the safe intervals for the given state, given a set of constraints.
-    fn get_safe_intervals(
-        constraints: &Arc<ConstraintSet<S, C>>,
-        state: &Arc<S>,
-    ) -> Vec<Interval<C>> {
+    fn get_safe_intervals(constraints: &Arc<ConstraintSet<S, C>>, state: &S) -> Vec<Interval<C>> {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
             let mut safe_intervals = vec![];
 
@@ -376,7 +366,7 @@ where
     fn get_solution(
         &self,
         goal: &SearchNode<SippState<S, C>, C, DC>,
-    ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
+    ) -> Solution<Rc<SippState<S, C>>, A, C, DC> {
         let mut solution = Solution::default();
         let mut current = goal.state.clone();
 
@@ -419,7 +409,7 @@ where
 pub struct SippConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Eq
         + PartialOrd
@@ -441,7 +431,7 @@ where
 impl<TS, S, A, C, DC, H> SippConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Eq
         + PartialOrd
@@ -473,7 +463,7 @@ where
 pub struct GeneralizedSippConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Eq
         + PartialOrd
@@ -486,7 +476,7 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    task: Arc<SippTask<S, C, DC>>,
+    task: SippTask<S, C, DC>,
     constraints: Arc<ConstraintSet<S, C>>,
     heuristic: Arc<H>,
     single_path: bool,
@@ -496,7 +486,7 @@ where
 impl<TS, S, A, C, DC, H> GeneralizedSippConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Debug + Copy + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     A: Copy,
     C: Eq
         + PartialOrd
@@ -510,7 +500,7 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
-        task: Arc<SippTask<S, C, DC>>,
+        task: SippTask<S, C, DC>,
         constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
         single_path: bool,
@@ -534,14 +524,14 @@ where
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     pub safe_interval: Interval<C>,
-    pub internal_state: Arc<S>,
+    pub internal_state: S,
 }
 
 /// Task wrapper for the Safe Interval Path Planning algorithm that extends
 /// a given task definition with all SIPP states that correspong to it.
 pub struct SippTask<S, C, DC>
 where
-    S: State + Debug + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     C: Eq
         + PartialOrd
         + Ord
@@ -553,15 +543,15 @@ where
     DC: Copy,
 {
     initial_times: Vec<C>,
-    initial_states: Vec<Arc<SippState<S, C>>>,
-    goal_state: Arc<SippState<S, C>>,
+    initial_states: Vec<Rc<SippState<S, C>>>,
+    goal_state: SippState<S, C>,
     internal_task: Arc<Task<S, C>>,
     _phantom: PhantomData<DC>,
 }
 
 impl<S, C, DC> SippTask<S, C, DC>
 where
-    S: State + Debug + Hash + Eq,
+    S: State + Debug + Hash + Eq + Clone,
     C: Eq
         + PartialOrd
         + Ord
@@ -574,8 +564,8 @@ where
 {
     pub fn new(
         initial_times: Vec<C>,
-        initial_states: Vec<Arc<SippState<S, C>>>,
-        goal_state: Arc<SippState<S, C>>,
+        initial_states: Vec<Rc<SippState<S, C>>>,
+        goal_state: SippState<S, C>,
         internal_task: Arc<Task<S, C>>,
     ) -> Self {
         SippTask {
@@ -592,7 +582,7 @@ where
             && state.cost < self.goal_state.safe_interval.end
             && self
                 .internal_task
-                .is_goal_state(state.state.internal_state.as_ref())
+                .is_goal_state(&state.state.internal_state)
     }
 }
 
@@ -653,8 +643,8 @@ mod tests {
         for x in 0..size {
             for y in 0..size {
                 let task = Arc::new(Task::new(
-                    Arc::new(SimpleState(GraphNodeId(x + size * y))),
-                    Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+                    SimpleState(GraphNodeId(x + size * y)),
+                    SimpleState(GraphNodeId(size * size - 1)),
                     OrderedFloat(0.0),
                 ));
                 let config = SippConfig::new(
@@ -664,10 +654,7 @@ mod tests {
                     Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),
-                        Arc::new(SimpleHeuristic::new(
-                            transition_system.clone(),
-                            Arc::new(task.reverse()),
-                        )),
+                        SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
                     )),
                 );
                 let before = solver.get_stats();
@@ -686,7 +673,7 @@ mod tests {
 
     #[test]
     fn test_safe_intervals() {
-        let state = Arc::new(SimpleState(GraphNodeId(0)));
+        let state = SimpleState(GraphNodeId(0));
 
         let times = vec![
             OrderedFloat(10.0),
@@ -731,8 +718,8 @@ mod tests {
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
-            Arc::new(SimpleState(GraphNodeId(0))),
-            Arc::new(SimpleState(GraphNodeId(size * size - 1))),
+            SimpleState(GraphNodeId(0)),
+            SimpleState(GraphNodeId(size * size - 1)),
             OrderedFloat(0.0),
         ));
 
@@ -747,8 +734,8 @@ mod tests {
         for k in 0..size {
             for l in vec![3, 6] {
                 for state in vec![
-                    Arc::new(SimpleState(GraphNodeId(l + size * k))),
-                    Arc::new(SimpleState(GraphNodeId(k + size * l))),
+                    SimpleState(GraphNodeId(l + size * k)),
+                    SimpleState(GraphNodeId(k + size * l)),
                 ] {
                     constraints.add(Arc::new(Constraint::new_state_constraint(
                         0,
@@ -771,10 +758,7 @@ mod tests {
             Arc::new(ReverseResumableAStar::new(
                 transition_system.clone(),
                 task.clone(),
-                Arc::new(SimpleHeuristic::new(
-                    transition_system.clone(),
-                    Arc::new(task.reverse()),
-                )),
+                SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
             )),
         );
 

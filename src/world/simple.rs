@@ -40,7 +40,7 @@ impl SimpleWorld {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SimpleState(pub GraphNodeId);
 
 impl State for SimpleState {
@@ -50,31 +50,31 @@ impl State for SimpleState {
 }
 
 impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld {
-    fn actions_from(&self, state: &Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
+    fn actions_from(&self, state: &SimpleState) -> std::slice::Iter<GraphEdgeId> {
         self.graph.get_edges_out(state.0).iter()
     }
 
-    fn transition(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> SimpleState {
+    fn transition(&self, _state: &SimpleState, action: &GraphEdgeId) -> SimpleState {
         SimpleState(self.graph.get_edge(*action).to)
     }
 
-    fn transition_cost(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> MyTime {
+    fn transition_cost(&self, _state: &SimpleState, action: &GraphEdgeId) -> MyTime {
         self.time(*action)
     }
 
-    fn reverse_actions_from(&self, state: &Arc<SimpleState>) -> std::slice::Iter<GraphEdgeId> {
+    fn reverse_actions_from(&self, state: &SimpleState) -> std::slice::Iter<GraphEdgeId> {
         self.graph.get_edges_in(state.0).iter()
     }
 
-    fn reverse_transition(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> SimpleState {
+    fn reverse_transition(&self, _state: &SimpleState, action: &GraphEdgeId) -> SimpleState {
         SimpleState(self.graph.get_edge(*action).from)
     }
 
-    fn reverse_transition_cost(&self, _state: &Arc<SimpleState>, action: &GraphEdgeId) -> MyTime {
+    fn reverse_transition_cost(&self, _state: &SimpleState, action: &GraphEdgeId) -> MyTime {
         self.time(*action)
     }
 
-    fn can_wait_at(&self, _state: &Arc<SimpleState>) -> bool {
+    fn can_wait_at(&self, _state: &SimpleState) -> bool {
         true
     }
 
@@ -124,7 +124,7 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld 
 
 pub struct SimpleHeuristic {
     transition_system: Arc<SimpleWorld>,
-    goal_state: Arc<SimpleState>,
+    goal_state: SimpleState,
 }
 
 impl SimpleHeuristic {
@@ -137,7 +137,7 @@ impl SimpleHeuristic {
 }
 
 impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleHeuristic {
-    fn get_heuristic(&self, state: &Arc<SimpleState>) -> Option<MyTime> {
+    fn get_heuristic(&self, state: &SimpleState) -> Option<MyTime> {
         Some(
             self.transition_system
                 .time_between(state.0, self.goal_state.0),
@@ -204,16 +204,16 @@ mod tests {
         let move1 = Move {
             agent: 0,
             action: Some(GraphEdgeId(0)),
-            from: Arc::new(SimpleState(GraphNodeId(0))),
-            to: Arc::new(SimpleState(GraphNodeId(1))),
+            from: SimpleState(GraphNodeId(0)),
+            to: SimpleState(GraphNodeId(1)),
             interval: Interval::new(initial_time, initial_time + 1.0),
         };
 
         let move2 = Move {
             agent: 1,
             action: Some(GraphEdgeId(0)),
-            from: Arc::new(SimpleState(GraphNodeId(1))),
-            to: Arc::new(SimpleState(GraphNodeId(0))),
+            from: SimpleState(GraphNodeId(1)),
+            to: SimpleState(GraphNodeId(0)),
             interval: Interval::new(initial_time, initial_time + 1.0),
         };
 

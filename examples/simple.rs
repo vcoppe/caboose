@@ -68,8 +68,8 @@ fn get_model() -> Model {
         //(6, 3),
     ] {
         tasks.push(Arc::new(Task::new(
-            Arc::new(SimpleState(GraphNodeId(from))),
-            Arc::new(SimpleState(GraphNodeId(to))),
+            SimpleState(GraphNodeId(from)),
+            SimpleState(GraphNodeId(to)),
             OrderedFloat(0.0),
         )));
     }
@@ -81,14 +81,11 @@ fn get_model() -> Model {
         tasks
             .iter()
             .map(|t| {
-                Arc::new(ReverseResumableAStar::new(
+                ReverseResumableAStar::new(
                     transition_system.clone(),
                     t.clone(),
-                    Arc::new(SimpleHeuristic::new(
-                        transition_system.clone(),
-                        Arc::new(t.reverse()),
-                    )),
-                ))
+                    SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
+                )
             })
             .collect(),
     );

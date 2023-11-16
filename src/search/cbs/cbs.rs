@@ -21,7 +21,7 @@ use crate::{
 pub struct ConflictBasedSearch<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash + Copy,
+    S: Debug + State + Eq + Hash + Clone,
     A: Debug + Copy,
     C: Debug
         + Hash
@@ -53,7 +53,7 @@ where
 impl<TS, S, A, C, DC, H> ConflictBasedSearch<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash + Copy,
+    S: Debug + State + Eq + Hash + Clone,
     A: Debug + Copy,
     C: Debug
         + Hash
@@ -265,11 +265,11 @@ where
         // Create a successor nodes for each new constraint
         let successors = vec![
             CbsNode::new(minimal_clone.clone(), constraints[0].clone()),
-            CbsNode::new(minimal_clone.clone(), constraints[1].clone()),
+            CbsNode::new(minimal_clone, constraints[1].clone()),
         ];
 
         // Get all the constraints for each agent
-        let constraint_sets = T2(
+        let constraint_sets = (
             successors[0].get_constraints(agents[0]),
             successors[1].get_constraints(agents[1]),
         );
@@ -278,15 +278,15 @@ where
         let solutions = vec![
             self.lsipp.solve(&LSippConfig::new_with_pivots(
                 config.tasks[agents[0]].clone(),
-                constraint_sets[0].0.clone(),
-                constraint_sets[0].1.clone(),
+                constraint_sets.0 .0.clone(),
+                constraint_sets.0 .1,
                 config.pivots.clone(),
                 config.heuristic_to_pivots.clone(),
             )),
             self.lsipp.solve(&LSippConfig::new_with_pivots(
                 config.tasks[agents[1]].clone(),
-                constraint_sets[1].0.clone(),
-                constraint_sets[1].1.clone(),
+                constraint_sets.1 .0,
+                constraint_sets.1 .1,
                 config.pivots.clone(),
                 config.heuristic_to_pivots.clone(),
             )),
@@ -548,7 +548,7 @@ where
 pub struct CbsConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Eq
         + PartialOrd
         + Ord
@@ -563,9 +563,9 @@ where
     pub n_agents: usize,
     pub tasks: Vec<Arc<Task<S, C>>>,
     /// A set of pivot states.
-    pivots: Arc<Vec<Arc<S>>>,
+    pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
-    heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
+    heuristic_to_pivots: Arc<Vec<ReverseResumableAStar<TS, S, A, C, DC, H>>>,
     collision_precision: DC,
     _phantom: PhantomData<(TS, A)>,
 }
@@ -573,7 +573,7 @@ where
 impl<TS, S, A, C, DC, H> CbsConfig<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Eq
         + PartialOrd
         + Ord
@@ -587,8 +587,8 @@ where
 {
     pub fn new(
         tasks: Vec<Arc<Task<S, C>>>,
-        pivots: Arc<Vec<Arc<S>>>,
-        heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
+        pivots: Arc<Vec<S>>,
+        heuristic_to_pivots: Arc<Vec<ReverseResumableAStar<TS, S, A, C, DC, H>>>,
         collision_precision: DC,
     ) -> Self {
         Self {
@@ -606,7 +606,7 @@ where
 #[derive(Debug)]
 pub struct CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -620,7 +620,7 @@ where
 
 impl<S, A, C, DC> Default for CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -638,7 +638,7 @@ where
 
 impl<S, A, C, DC> CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -664,10 +664,7 @@ where
         }
     }
 
-    pub fn get_constraints(
-        &self,
-        agent: usize,
-    ) -> (Arc<ConstraintSet<S, C>>, Arc<LandmarkSet<S, C>>) {
+    pub fn get_constraints(&self, agent: usize) -> (Arc<ConstraintSet<S, C>>, LandmarkSet<S, C>) {
         let mut constraints = ConstraintSet::default();
         let mut landmarks = LandmarkSet::default();
 
@@ -695,7 +692,7 @@ where
         landmarks.sort_unstable();
         constraints.unify();
 
-        (Arc::new(constraints), Arc::new(landmarks))
+        (Arc::new(constraints), landmarks)
     }
 
     pub fn get_constraints_alt(
@@ -827,7 +824,7 @@ where
 // TODO: add high-level heuristic to ordering
 impl<S, A, C, DC> PartialEq for CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -838,7 +835,7 @@ where
 
 impl<S, A, C, DC> Eq for CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -846,7 +843,7 @@ where
 
 impl<S, A, C, DC> PartialOrd for CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -857,7 +854,7 @@ where
 
 impl<S, A, C, DC> Ord for CbsNode<S, A, C, DC>
 where
-    S: Debug + State + Eq + Hash,
+    S: Debug + State + Eq + Hash + Clone,
     C: Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
@@ -921,13 +918,13 @@ mod tests {
 
         let tasks = vec![
             Arc::new(Task::new(
-                Arc::new(SimpleState(GraphNodeId(0))),
-                Arc::new(SimpleState(GraphNodeId(9))),
+                SimpleState(GraphNodeId(0)),
+                SimpleState(GraphNodeId(9)),
                 OrderedFloat(0.0),
             )),
             Arc::new(Task::new(
-                Arc::new(SimpleState(GraphNodeId(9))),
-                Arc::new(SimpleState(GraphNodeId(0))),
+                SimpleState(GraphNodeId(9)),
+                SimpleState(GraphNodeId(0)),
                 OrderedFloat(0.0),
             )),
         ];
@@ -937,14 +934,11 @@ mod tests {
             tasks
                 .iter()
                 .map(|t| {
-                    Arc::new(ReverseResumableAStar::new(
+                    ReverseResumableAStar::new(
                         transition_system.clone(),
                         t.clone(),
-                        Arc::new(SimpleHeuristic::new(
-                            transition_system.clone(),
-                            Arc::new(t.reverse()),
-                        )),
-                    ))
+                        SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
+                    )
                 })
                 .collect(),
         );

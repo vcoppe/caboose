@@ -3,6 +3,7 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
+    rc::Rc,
     sync::Arc,
 };
 
@@ -60,12 +61,12 @@ where
 pub trait Heuristic<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: Hash + Eq,
+    S: Hash + Eq + Clone,
     C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default + LimitValues,
 {
     /// Returns the heuristic value for the given state,
     /// or None if the goal state is not reachable from that state.
-    fn get_heuristic(&self, state: &Arc<S>) -> Option<DC>;
+    fn get_heuristic(&self, state: &S) -> Option<DC>;
 }
 
 /// Differentiable heuristic built on top of heuristics dealing with
@@ -73,12 +74,12 @@ where
 pub struct DifferentialHeuristic<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Hash + Eq,
+    S: State + Hash + Eq + Clone,
     C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default + LimitValues,
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    heuristic_to_pivots: Arc<Vec<H>>,
     task_heuristic: Option<usize>,
     _phantom: PhantomData<(TS, S, A, DC)>,
 }
@@ -86,20 +87,20 @@ where
 impl<TS, S, A, C, DC, H> DifferentialHeuristic<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Hash + Eq,
+    S: State + Hash + Eq + Clone,
     C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default + LimitValues,
     DC: Ord + Sub<DC, Output = DC> + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
         task: Arc<Task<S, C>>,
-        pivots: Arc<Vec<Arc<S>>>,
-        heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+        pivots: Arc<Vec<S>>,
+        heuristic_to_pivots: Arc<Vec<H>>,
     ) -> Self {
         DifferentialHeuristic {
             task_heuristic: pivots
                 .iter()
-                .position(|pivot| pivot.is_equivalent(task.goal_state.as_ref())),
+                .position(|pivot| pivot.is_equivalent(&task.goal_state)),
             task,
             heuristic_to_pivots,
             _phantom: PhantomData::default(),
@@ -110,12 +111,12 @@ where
 impl<TS, S, A, C, DC, H> Heuristic<TS, S, A, C, DC> for DifferentialHeuristic<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC>,
-    S: State + Hash + Eq,
+    S: State + Hash + Eq + Clone,
     C: Ord + Add<DC, Output = C> + Sub<C, Output = DC> + Copy + Default + LimitValues,
     DC: Ord + Sub<DC, Output = DC> + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
-    fn get_heuristic(&self, state: &Arc<S>) -> Option<DC> {
+    fn get_heuristic(&self, state: &S) -> Option<DC> {
         if let Some(task_heuristic) = self.task_heuristic {
             self.heuristic_to_pivots[task_heuristic].get_heuristic(state)
         } else {
@@ -142,7 +143,7 @@ where
     C: Copy + Eq + Ord + Add<DC, Output = C>,
     DC: Copy,
 {
-    pub state: Arc<S>,
+    pub state: Rc<S>,
     pub cost: C,
     pub heuristic: DC,
 }
@@ -371,8 +372,8 @@ where
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     pub agent: usize,
-    pub state: Arc<S>,
-    pub next: Option<Arc<S>>,
+    pub state: S,
+    pub next: Option<S>,
     pub interval: Interval<C>,
     pub type_: ConstraintType,
 }
@@ -381,7 +382,7 @@ impl<S, C> Constraint<S, C>
 where
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
-    pub fn new_state_constraint(agent: usize, state: Arc<S>, interval: Interval<C>) -> Self {
+    pub fn new_state_constraint(agent: usize, state: S, interval: Interval<C>) -> Self {
         Self {
             agent,
             state,
@@ -390,12 +391,7 @@ where
             type_: ConstraintType::State,
         }
     }
-    pub fn new_action_constraint(
-        agent: usize,
-        state: Arc<S>,
-        next: Arc<S>,
-        interval: Interval<C>,
-    ) -> Self {
+    pub fn new_action_constraint(agent: usize, state: S, next: S, interval: Interval<C>) -> Self {
         Self {
             agent,
             state,
@@ -438,16 +434,16 @@ where
 /// Set of constraints that can be imposed on agents in a search algorithm.
 pub struct ConstraintSet<S, C>
 where
-    S: State + Eq + Hash,
+    S: State + Eq + Hash + Clone,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
-    pub state_constraints: FxHashMap<Arc<S>, Vec<Arc<Constraint<S, C>>>>,
-    pub action_constraints: FxHashMap<(Arc<S>, Arc<S>), Vec<Arc<Constraint<S, C>>>>,
+    pub state_constraints: FxHashMap<S, Vec<Arc<Constraint<S, C>>>>,
+    pub action_constraints: FxHashMap<(S, S), Vec<Arc<Constraint<S, C>>>>,
 }
 
 impl<S, C> Default for ConstraintSet<S, C>
 where
-    S: State + Eq + Hash,
+    S: State + Eq + Hash + Clone,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
     fn default() -> Self {
@@ -460,7 +456,7 @@ where
 
 impl<S, C> ConstraintSet<S, C>
 where
-    S: State + Eq + Hash,
+    S: State + Eq + Hash + Clone,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
 {
     pub fn add(&mut self, constraint: Arc<Constraint<S, C>>) {
@@ -483,15 +479,11 @@ where
         }
     }
 
-    pub fn get_state_constraints(&self, state: &Arc<S>) -> Option<&Vec<Arc<Constraint<S, C>>>> {
+    pub fn get_state_constraints(&self, state: &S) -> Option<&Vec<Arc<Constraint<S, C>>>> {
         self.state_constraints.get(state)
     }
 
-    pub fn get_action_constraints(
-        &self,
-        from: &Arc<S>,
-        to: &Arc<S>,
-    ) -> Option<&Vec<Arc<Constraint<S, C>>>> {
+    pub fn get_action_constraints(&self, from: &S, to: &S) -> Option<&Vec<Arc<Constraint<S, C>>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 
