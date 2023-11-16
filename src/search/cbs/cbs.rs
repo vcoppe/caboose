@@ -848,7 +848,7 @@ where
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.total_cost.partial_cmp(&other.total_cost)
+        Some(self.cmp(other))
     }
 }
 

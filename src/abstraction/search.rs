@@ -171,11 +171,7 @@ where
     DC: Copy,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.cost + self.heuristic == other.cost + other.heuristic {
-            return other.cost.partial_cmp(&self.cost); // Estimation is more precise when the cost is larger
-        } else {
-            (self.cost + self.heuristic).partial_cmp(&(other.cost + other.heuristic))
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -185,11 +181,11 @@ where
     DC: Copy,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.cost + self.heuristic == other.cost + other.heuristic {
-            return other.cost.cmp(&self.cost); // Estimation is more precise when the cost is larger
-        } else {
-            (self.cost + self.heuristic).cmp(&(other.cost + other.heuristic))
-        }
+        (self.cost + self.heuristic)
+            .cmp(&(other.cost + other.heuristic))
+            .then_with(|| {
+                self.cost.cmp(&other.cost).reverse() // Estimation is more precise when the cost is larger
+            })
     }
 }
 
@@ -263,24 +259,7 @@ where
     DC: Ord + Default,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.type_
-            .partial_cmp(&other.type_)
-            .and_then(|_| other.overcost.partial_cmp(&self.overcost))
-            .and_then(|_| {
-                self.moves
-                    .0
-                    .interval
-                    .start
-                    .min(self.moves.1.interval.start)
-                    .partial_cmp(
-                        &&other
-                            .moves
-                            .0
-                            .interval
-                            .start
-                            .min(other.moves.1.interval.start),
-                    )
-            })
+        Some(self.cmp(other))
     }
 }
 
@@ -290,8 +269,8 @@ where
     DC: Ord + Default,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.type_ == other.type_ {
-            if self.overcost == other.overcost {
+        self.type_.cmp(&other.type_).then_with(|| {
+            self.overcost.cmp(&other.overcost).reverse().then_with(|| {
                 self.moves
                     .0
                     .interval
@@ -305,12 +284,8 @@ where
                             .start
                             .min(other.moves.1.interval.start),
                     )
-            } else {
-                other.overcost.cmp(&self.overcost)
-            }
-        } else {
-            self.type_.cmp(&other.type_)
-        }
+            })
+        })
     }
 }
 
@@ -418,7 +393,7 @@ where
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.interval.partial_cmp(&other.interval)
+        Some(self.cmp(other))
     }
 }
 
