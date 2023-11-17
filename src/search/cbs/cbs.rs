@@ -9,6 +9,7 @@ use std::{
     vec,
 };
 
+use fxhash::FxHashMap;
 use tuple::{A2, T2};
 
 use crate::{
@@ -98,7 +99,15 @@ where
         let mut root = CbsNode::default();
 
         // Solve each task independently
-        for task in config.tasks.iter() {
+        for (agent, task) in config.tasks.iter().enumerate() {
+            if config.frozen.contains_key(&agent) {
+                let solution = config.frozen[&agent].clone();
+                root.total_cost =
+                    *solution.costs.last().unwrap() + root.total_cost - task.initial_cost;
+                root.solutions.push(solution);
+                continue;
+            }
+
             let config = LSippConfig::new_with_pivots(
                 task.clone(),
                 Default::default(),
@@ -183,10 +192,9 @@ where
 
         let mut landmark_added = false;
         let mut valid_successors = vec![];
-        for (i, (mut successor, solution)) in
-            successors.drain(..).zip(solutions.drain(..)).enumerate()
+        for (i, (successor, solution)) in successors.drain(..).zip(solutions.drain(..)).enumerate()
         {
-            if let Some(solution) = solution {
+            if let (Some(mut successor), Some(solution)) = (successor, solution) {
                 // Set the real parent of the successor node (minimal clone is used in plan_new_paths)
                 successor.parent = Some(node.clone());
 
@@ -199,29 +207,31 @@ where
                 successor.solutions.push(solution);
 
                 // Try to add a landmark to the successor node (given by the negative constraint of the other branch)
-                if !landmark_added && constraints[1 - i].type_ == ConstraintType::Action {
-                    // Transform action constraint in two landmarks
-                    let from = Constraint::new_state_constraint(
-                        agents[1 - i],
-                        constraints[1 - i].state.clone(),
-                        constraints[1 - i].interval,
-                    );
-                    let to = Constraint::new_state_constraint(
-                        agents[1 - i],
-                        constraints[1 - i].next.as_ref().unwrap().clone(),
-                        Interval::new(
-                            from.interval.start
-                                + (conflict.moves[1 - i].interval.end
-                                    - conflict.moves[1 - i].interval.start),
-                            from.interval.end
-                                + (conflict.moves[1 - i].interval.end
-                                    - conflict.moves[1 - i].interval.start),
-                        ),
-                    );
+                if let Some(other_constraint) = &constraints[1 - i] {
+                    if !landmark_added && other_constraint.type_ == ConstraintType::Action {
+                        // Transform action constraint in two landmarks
+                        let from = Constraint::new_state_constraint(
+                            agents[1 - i],
+                            other_constraint.state.clone(),
+                            other_constraint.interval,
+                        );
+                        let to = Constraint::new_state_constraint(
+                            agents[1 - i],
+                            other_constraint.next.as_ref().unwrap().clone(),
+                            Interval::new(
+                                from.interval.start
+                                    + (conflict.moves[1 - i].interval.end
+                                        - conflict.moves[1 - i].interval.start),
+                                from.interval.end
+                                    + (conflict.moves[1 - i].interval.end
+                                        - conflict.moves[1 - i].interval.start),
+                            ),
+                        );
 
-                    if !successor.contains_landmark(T2(&from, &to)) {
-                        successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
-                        landmark_added = true;
+                        if !successor.contains_landmark(T2(&from, &to)) {
+                            successor.landmark = Some(T2(Arc::new(from), Arc::new(to)));
+                            landmark_added = true;
+                        }
                     }
                 }
 
@@ -245,17 +255,37 @@ where
         node: &CbsNode<S, A, C, DC>,
         conflict: &Conflict<S, A, C, DC>,
     ) -> (
-        Vec<CbsNode<S, A, C, DC>>,
+        Vec<Option<CbsNode<S, A, C, DC>>>,
         Vec<Option<Solution<Arc<SippState<S, C>>, A, C, DC>>>,
-        A2<Arc<Constraint<S, C>>>,
+        A2<Option<Arc<Constraint<S, C>>>>,
     ) {
         // Get the agents involved in the conflict
         let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
 
+        // Check if the agents are already frozen
+        let frozen = T2(
+            config.frozen.contains_key(&agents[0]),
+            config.frozen.contains_key(&agents[1]),
+        );
+
         // Get one constraint for each agent from the transition system to avoid the conflict
         let constraints = T2(
-            Arc::new(self.get_constraint(config, T2(&conflict.moves.0, &conflict.moves.1))),
-            Arc::new(self.get_constraint(config, T2(&conflict.moves.1, &conflict.moves.0))),
+            if frozen[0] {
+                None
+            } else {
+                Some(Arc::new(self.get_constraint(
+                    config,
+                    T2(&conflict.moves.0, &conflict.moves.1),
+                )))
+            },
+            if frozen[1] {
+                None
+            } else {
+                Some(Arc::new(self.get_constraint(
+                    config,
+                    T2(&conflict.moves.1, &conflict.moves.0),
+                )))
+            },
         );
 
         // Get a minimal clone of the current node to allow retrieving the constraints in the successor nodes
@@ -264,32 +294,50 @@ where
 
         // Create a successor nodes for each new constraint
         let successors = vec![
-            CbsNode::new(minimal_clone.clone(), constraints[0].clone()),
-            CbsNode::new(minimal_clone, constraints[1].clone()),
+            constraints[0]
+                .as_ref()
+                .map(|c| CbsNode::new(minimal_clone.clone(), c.clone())),
+            constraints[1]
+                .as_ref()
+                .map(|c| CbsNode::new(minimal_clone, c.clone())),
         ];
 
         // Get all the constraints for each agent
         let constraint_sets = (
-            successors[0].get_constraints(agents[0]),
-            successors[1].get_constraints(agents[1]),
+            successors[0]
+                .as_ref()
+                .map(|succ| succ.get_constraints(agents[0])),
+            successors[1]
+                .as_ref()
+                .map(|succ| succ.get_constraints(agents[1])),
         );
 
         // Compute a new path for each agent, taking into account the new constraint
         let solutions = vec![
-            self.lsipp.solve(&LSippConfig::new_with_pivots(
-                config.tasks[agents[0]].clone(),
-                constraint_sets.0 .0.clone(),
-                constraint_sets.0 .1,
-                config.pivots.clone(),
-                config.heuristic_to_pivots.clone(),
-            )),
-            self.lsipp.solve(&LSippConfig::new_with_pivots(
-                config.tasks[agents[1]].clone(),
-                constraint_sets.1 .0,
-                constraint_sets.1 .1,
-                config.pivots.clone(),
-                config.heuristic_to_pivots.clone(),
-            )),
+            constraint_sets
+                .0
+                .map(|cs| {
+                    self.lsipp.solve(&LSippConfig::new_with_pivots(
+                        config.tasks[agents[0]].clone(),
+                        cs.0.clone(),
+                        cs.1,
+                        config.pivots.clone(),
+                        config.heuristic_to_pivots.clone(),
+                    ))
+                })
+                .flatten(),
+            constraint_sets
+                .1
+                .map(|cs| {
+                    self.lsipp.solve(&LSippConfig::new_with_pivots(
+                        config.tasks[agents[1]].clone(),
+                        cs.0,
+                        cs.1,
+                        config.pivots.clone(),
+                        config.heuristic_to_pivots.clone(),
+                    ))
+                })
+                .flatten(),
         ];
 
         (successors, solutions, constraints)
@@ -503,11 +551,19 @@ where
             } else if let (Some(solution), None) = (&new_solutions[0], &new_solutions[1]) {
                 conflict.overcost =
                     *solution.costs.last().unwrap() - *solutions[agents[0]].costs.last().unwrap();
-                conflict.type_ = ConflictType::Cardinal;
+                if config.frozen.contains_key(&agents[1]) {
+                    conflict.type_ = ConflictType::Frozen;
+                } else {
+                    conflict.type_ = ConflictType::Cardinal;
+                }
             } else if let (None, Some(solution)) = (&new_solutions[0], &new_solutions[1]) {
                 conflict.overcost =
                     *solution.costs.last().unwrap() - *solutions[agents[1]].costs.last().unwrap();
-                conflict.type_ = ConflictType::Cardinal;
+                if config.frozen.contains_key(&agents[0]) {
+                    conflict.type_ = ConflictType::Frozen;
+                } else {
+                    conflict.type_ = ConflictType::Cardinal;
+                }
             } else if let (Some(solution1), Some(solution2)) =
                 (&new_solutions[0], &new_solutions[1])
             {
@@ -562,10 +618,11 @@ where
 {
     pub n_agents: usize,
     pub tasks: Vec<Arc<Task<S, C>>>,
+    frozen: FxHashMap<usize, Solution<Arc<SippState<S, C>>, A, C, DC>>,
     /// A set of pivot states.
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
-    heuristic_to_pivots: Arc<Vec<ReverseResumableAStar<TS, S, A, C, DC, H>>>,
+    heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
     collision_precision: DC,
     _phantom: PhantomData<(TS, A)>,
 }
@@ -588,17 +645,22 @@ where
     pub fn new(
         tasks: Vec<Arc<Task<S, C>>>,
         pivots: Arc<Vec<S>>,
-        heuristic_to_pivots: Arc<Vec<ReverseResumableAStar<TS, S, A, C, DC, H>>>,
+        heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
         collision_precision: DC,
     ) -> Self {
         Self {
             n_agents: tasks.len(),
             tasks,
+            frozen: FxHashMap::default(),
             pivots,
             heuristic_to_pivots,
             collision_precision,
             _phantom: PhantomData::default(),
         }
+    }
+
+    pub fn add_frozen(&mut self, agent: usize, solution: Solution<Arc<SippState<S, C>>, A, C, DC>) {
+        self.frozen.insert(agent, solution);
     }
 }
 
@@ -934,11 +996,11 @@ mod tests {
             tasks
                 .iter()
                 .map(|t| {
-                    ReverseResumableAStar::new(
+                    Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         t.clone(),
                         SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
-                    )
+                    ))
                 })
                 .collect(),
         );
@@ -957,5 +1019,66 @@ mod tests {
                 .sum::<OrderedFloat<f32>>(),
             OrderedFloat(20.0)
         );
+    }
+
+    #[test]
+    fn test_frozen() {
+        let size = 10;
+        let graph = simple_graph(size);
+        let transition_system = Arc::new(SimpleWorld::new(graph));
+
+        let mut tasks = vec![Arc::new(Task::new(
+            SimpleState(GraphNodeId(0)),
+            SimpleState(GraphNodeId(9)),
+            OrderedFloat(0.0),
+        ))];
+
+        let mut pivots = vec![tasks[0].goal_state.clone()];
+        let mut heuristic_to_pivots = vec![Arc::new(ReverseResumableAStar::new(
+            transition_system.clone(),
+            tasks[0].clone(),
+            SimpleHeuristic::new(transition_system.clone(), Arc::new(tasks[0].reverse())),
+        ))];
+
+        let config = CbsConfig::new(
+            tasks.clone(),
+            Arc::new(pivots.clone()),
+            Arc::new(heuristic_to_pivots.clone()),
+            OrderedFloat(1e-6),
+        );
+
+        let mut solver = ConflictBasedSearch::new(transition_system.clone());
+
+        let mut solutions = solver.solve(&config).unwrap();
+
+        assert_eq!(*solutions[0].costs.last().unwrap(), OrderedFloat(9.0));
+
+        tasks.push(Arc::new(Task::new(
+            SimpleState(GraphNodeId(9)),
+            SimpleState(GraphNodeId(0)),
+            OrderedFloat(0.0),
+        )));
+        pivots.push(tasks[1].goal_state.clone());
+        heuristic_to_pivots.push(Arc::new(ReverseResumableAStar::new(
+            transition_system.clone(),
+            tasks[1].clone(),
+            SimpleHeuristic::new(transition_system.clone(), Arc::new(tasks[1].reverse())),
+        )));
+
+        let mut config = CbsConfig::new(
+            tasks,
+            Arc::new(pivots.clone()),
+            Arc::new(heuristic_to_pivots),
+            OrderedFloat(1e-6),
+        );
+        config.add_frozen(0, solutions.pop().unwrap());
+
+        let solutions = solver.solve(&config).unwrap();
+
+        assert_eq!(*solutions[0].costs.last().unwrap(), OrderedFloat(9.0));
+        assert_eq!(*solutions[1].costs.last().unwrap(), OrderedFloat(11.0));
+
+        assert_eq!(solutions[0].states, config.frozen[&0].states);
+        assert_eq!(solutions[0].costs, config.frozen[&0].costs);
     }
 }

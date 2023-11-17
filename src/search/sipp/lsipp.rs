@@ -311,7 +311,7 @@ where
     /// A set of pivot states.
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
-    heuristic_to_pivots: Arc<Vec<H>>,
+    heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     _phantom: PhantomData<(TS, A)>,
 }
 
@@ -335,7 +335,7 @@ where
         task: Arc<Task<S, C>>,
         constraints: Arc<ConstraintSet<S, C>>,
         landmarks: LandmarkSet<S, C>,
-        heuristic: H,
+        heuristic: Arc<H>,
     ) -> Self {
         Self {
             task: task.clone(),
@@ -352,7 +352,7 @@ where
         constraints: Arc<ConstraintSet<S, C>>,
         landmarks: LandmarkSet<S, C>,
         pivots: Arc<Vec<S>>,
-        heuristic_to_pivots: Arc<Vec<H>>,
+        heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     ) -> Self {
         Self {
             task,
@@ -428,11 +428,11 @@ mod tests {
                     task.clone(),
                     Default::default(),
                     Default::default(),
-                    ReverseResumableAStar::new(
+                    Arc::new(ReverseResumableAStar::new(
                         transition_system.clone(),
                         task.clone(),
                         SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
-                    ),
+                    )),
                 );
                 let before = solver.get_stats();
                 let solution = solver.solve(&config).unwrap();
@@ -474,11 +474,11 @@ mod tests {
                     Interval::default(),
                 )),
             ],
-            ReverseResumableAStar::new(
+            Arc::new(ReverseResumableAStar::new(
                 transition_system.clone(),
                 task.clone(),
                 SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
-            ),
+            )),
         );
         let before = solver.get_stats();
         let solution = solver.solve(&config).unwrap();

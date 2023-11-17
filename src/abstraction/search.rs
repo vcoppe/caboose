@@ -79,7 +79,7 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    heuristic_to_pivots: Arc<Vec<H>>,
+    heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     task_heuristic: Option<usize>,
     _phantom: PhantomData<(TS, S, A, DC)>,
 }
@@ -95,7 +95,7 @@ where
     pub fn new(
         task: Arc<Task<S, C>>,
         pivots: Arc<Vec<S>>,
-        heuristic_to_pivots: Arc<Vec<H>>,
+        heuristic_to_pivots: Arc<Vec<Arc<H>>>,
     ) -> Self {
         DifferentialHeuristic {
             task_heuristic: pivots

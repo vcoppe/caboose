@@ -51,7 +51,7 @@ fn main() {
 
 fn get_model() -> Model {
     let graph_size = 10;
-    let scale = 80.0;
+    let scale = 60.0;
 
     let graph = simple_graph(graph_size);
     let transition_system = Arc::new(SimpleWorld::new(graph.clone()));
@@ -102,11 +102,11 @@ fn get_model() -> Model {
         tasks
             .iter()
             .map(|t| {
-                ReverseResumableAStar::new(
+                Arc::new(ReverseResumableAStar::new(
                     transition_system.clone(),
                     t.clone(),
                     SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
-                )
+                ))
             })
             .collect(),
     );
