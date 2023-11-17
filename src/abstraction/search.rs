@@ -69,6 +69,16 @@ where
     fn get_heuristic(&self, state: &S) -> Option<DC>;
 }
 
+/// Trait to build simple heuristics on the fly.
+pub trait MinimalHeuristic<TS, S, A, C, DC>
+where
+    TS: TransitionSystem<S, A, C, DC>,
+    S: State + Hash + Eq + Clone,
+    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default + LimitValues,
+{
+    fn build(transition_system: Arc<TS>, task: Arc<Task<S, C>>) -> Self;
+}
+
 /// Differentiable heuristic built on top of heuristics dealing with
 /// time and durations.
 pub struct DifferentialHeuristic<TS, S, A, C, DC, H>

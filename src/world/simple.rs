@@ -9,7 +9,8 @@ use ordered_float::OrderedFloat;
 use tuple::A2;
 
 use crate::{
-    Graph, GraphEdgeId, GraphNodeId, Heuristic, LimitValues, Move, State, Task, TransitionSystem,
+    Graph, GraphEdgeId, GraphNodeId, Heuristic, LimitValues, MinimalHeuristic, Move, State, Task,
+    TransitionSystem,
 };
 
 pub type MyTime = OrderedFloat<f32>;
@@ -143,6 +144,12 @@ impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for Simple
             self.transition_system
                 .time_between(state.0, self.goal_state.0),
         )
+    }
+}
+
+impl MinimalHeuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleHeuristic {
+    fn build(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState, MyTime>>) -> Self {
+        Self::new(transition_system, task)
     }
 }
 
