@@ -22,7 +22,8 @@ where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Hash + Eq + Clone,
     A: Debug + Copy,
-    C: Hash
+    C: Debug
+        + Hash
         + Eq
         + PartialOrd
         + Ord
@@ -32,7 +33,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Ord + Sub<DC, Output = DC> + Copy + Default,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
@@ -46,7 +47,8 @@ where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Hash + Eq + Clone,
     A: Debug + Copy,
-    C: Hash
+    C: Debug
+        + Hash
         + Eq
         + PartialOrd
         + Ord
@@ -56,7 +58,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Ord + Sub<DC, Output = DC> + Copy + Default,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm with landmarks.
@@ -148,10 +150,8 @@ where
                         .iter()
                         .map(|s| s.states.last().unwrap().clone())
                         .collect(),
-                    SippState {
-                        safe_interval: landmark.interval.clone(),
-                        internal_state: landmark.state.clone(),
-                    },
+                    landmark.state.clone(),
+                    landmark.interval.clone(),
                     task.clone(),
                 ),
                 config.constraints.clone(),
@@ -182,10 +182,8 @@ where
                     .iter()
                     .map(|s| s.states.last().unwrap().clone())
                     .collect(),
-                SippState {
-                    safe_interval: Interval::default(),
-                    internal_state: config.task.goal_state.clone(),
-                },
+                config.task.goal_state.clone(),
+                Interval::default(),
                 task.clone(),
             ),
             config.constraints.clone(),

@@ -2,7 +2,7 @@ use std::{
     cmp::Reverse,
     collections::{
         hash_map::Entry::{Occupied, Vacant},
-        BinaryHeap,
+        BTreeSet, BinaryHeap,
     },
     fmt::Debug,
     hash::Hash,
@@ -28,7 +28,8 @@ where
     TS: TransitionSystem<S, A, C, DC>,
     S: Debug + Hash + Eq + Clone,
     A: Copy,
-    C: Hash
+    C: Debug
+        + Hash
         + Eq
         + PartialOrd
         + Ord
@@ -38,7 +39,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: PartialOrd + Copy + Default,
+    DC: Debug + PartialOrd + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
@@ -46,6 +47,7 @@ where
     distance: FxHashMap<Rc<SippState<S, C>>, C>,
     closed: FxHashSet<Rc<SippState<S, C>>>,
     parent: FxHashMap<Rc<SippState<S, C>>, (Action<A, DC>, Rc<SippState<S, C>>)>,
+    goal_intervals: BTreeSet<Interval<C>>,
     stats: SippStats,
     _phantom: PhantomData<(A, H)>,
 }
@@ -55,7 +57,8 @@ where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Debug + Hash + Eq + Clone,
     A: Copy,
-    C: Hash
+    C: Debug
+        + Hash
         + Eq
         + PartialOrd
         + Ord
@@ -65,7 +68,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: PartialOrd + Copy + Default,
+    DC: Debug + PartialOrd + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm.
@@ -76,13 +79,14 @@ where
             distance: FxHashMap::default(),
             closed: FxHashSet::default(),
             parent: FxHashMap::default(),
+            goal_intervals: BTreeSet::default(),
             stats: SippStats::default(),
             _phantom: PhantomData::default(),
         }
     }
 
-    // Transforms the configuration into a generalized configuration, if any
-    // safe intervals exist for the initial state.
+    /// Transforms the configuration into a generalized configuration, if any
+    /// safe intervals exist for the initial state.
     pub fn to_generalized(
         &self,
         config: &SippConfig<TS, S, A, C, DC, H>,
@@ -90,30 +94,27 @@ where
     ) -> Option<GeneralizedSippConfig<TS, S, A, C, DC, H>> {
         let initial_time = config.task.initial_cost;
 
-        let safe_intervals =
-            Self::get_safe_intervals(&config.constraints, &config.task.initial_state);
-        let safe_interval = safe_intervals
-            .iter()
-            .find(|interval| initial_time >= interval.start && initial_time < interval.end);
+        // Find the safe interval in which the initial time is contained
+        let safe_intervals = Self::get_safe_intervals(
+            &config.constraints,
+            &config.task.initial_state,
+            &Interval::new(initial_time, initial_time),
+        );
 
-        if safe_interval.is_none() {
+        if safe_intervals.is_empty() || safe_intervals[0].start > initial_time {
             return None;
         }
 
         let initial_state = Rc::new(SippState {
-            safe_interval: *safe_interval.unwrap(),
+            safe_interval: safe_intervals[0],
             internal_state: config.task.initial_state.clone(),
         });
-
-        let goal_state = SippState {
-            safe_interval: config.interval,
-            internal_state: config.task.goal_state.clone(),
-        };
 
         let sipp_task = SippTask::new(
             vec![initial_time],
             vec![initial_state],
-            goal_state,
+            config.task.goal_state.clone(),
+            config.interval,
             config.task.clone(),
         );
 
@@ -139,21 +140,26 @@ where
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
     ) -> Vec<Solution<Rc<SippState<S, C>>, A, C, DC>> {
-        self.init(config);
+        if !self.init(config) {
+            return vec![];
+        }
+
         self.find_paths(config)
             .iter()
-            .map(|g| self.get_solution(g))
+            .map(|g| self.get_solution(config, g))
             .collect()
     }
 
     /// Initializes the search algorithm by clearing the data structures
     /// and enqueueing the initial states.
-    fn init(&mut self, config: &GeneralizedSippConfig<TS, S, A, C, DC, H>) {
+    fn init(&mut self, config: &GeneralizedSippConfig<TS, S, A, C, DC, H>) -> bool {
         self.queue.clear();
         self.distance.clear();
         self.closed.clear();
         self.parent.clear();
+        self.goal_intervals.clear();
 
+        // Enqueue the initial nodes
         for (initial_time, initial_state) in config
             .task
             .initial_times
@@ -171,7 +177,22 @@ where
             self.queue.push(Reverse(initial_node));
         }
 
+        // Find the safe intervals at the goal state
+        let mut safe_intervals = Self::get_safe_intervals(
+            &config.constraints,
+            &config.task.goal_state,
+            &config.task.goal_interval,
+        );
+        if safe_intervals.is_empty() {
+            return false;
+        }
+        safe_intervals.drain(..).for_each(|i| {
+            self.goal_intervals.insert(i);
+        });
+
         self.stats.searches += 1;
+
+        return true;
     }
 
     /// Finds all shortest paths from the initial states to any reachable safe interval
@@ -192,6 +213,10 @@ where
                 // A path to the goal has been found
                 goals.push(current.clone());
                 if config.single_path {
+                    break;
+                }
+                self.goal_intervals.remove(&current.state.safe_interval);
+                if self.goal_intervals.is_empty() {
                     break;
                 }
             }
@@ -229,9 +254,7 @@ where
             }
             let heuristic = heuristic.unwrap();
 
-            if current.cost + transition_cost + heuristic
-                >= config.task.goal_state.safe_interval.end
-            {
+            if current.cost + transition_cost + heuristic >= config.task.goal_interval.end {
                 // The goal state is not reachable in time
                 continue;
             }
@@ -242,8 +265,12 @@ where
 
             // Try to reach any of the safe intervals of the destination state
             // and add the corresponding successors to the queue if a better path has been found
-            for safe_interval in
-                Self::get_safe_intervals(&config.constraints, &successor_state).drain(..)
+            for safe_interval in Self::get_safe_intervals(
+                &config.constraints,
+                &successor_state,
+                &Interval::new(current.cost + transition_cost, C::max_value()),
+            )
+            .drain(..)
             {
                 let mut successor_cost = current.cost + transition_cost;
 
@@ -296,7 +323,7 @@ where
                     }
                 }
 
-                if successor_cost + heuristic >= config.task.goal_state.safe_interval.end {
+                if successor_cost + heuristic >= config.task.goal_interval.end {
                     // The goal state is not reachable in time
                     continue;
                 }
@@ -338,15 +365,20 @@ where
         }
     }
 
-    /// Returns the safe intervals for the given state, given a set of constraints.
-    fn get_safe_intervals(constraints: &Arc<ConstraintSet<S, C>>, state: &S) -> Vec<Interval<C>> {
+    /// Returns the safe intervals for the given state, given a set of constraints,
+    /// and that overlap with the given interval.
+    fn get_safe_intervals(
+        constraints: &Arc<ConstraintSet<S, C>>,
+        state: &S,
+        range: &Interval<C>,
+    ) -> Vec<Interval<C>> {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
             let mut safe_intervals = vec![];
 
             let mut current = Interval::default();
             for constraint in state_constraints.iter() {
                 current.end = constraint.interval.start;
-                if current.start < current.end {
+                if current.start < current.end && current.overlaps(range) {
                     safe_intervals.push(current);
                 }
                 current.start = constraint.interval.end;
@@ -365,10 +397,20 @@ where
     /// Reconstructs the solution from the given goal search node.
     fn get_solution(
         &self,
+        config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
         goal: &SearchNode<SippState<S, C>, C, DC>,
     ) -> Solution<Rc<SippState<S, C>>, A, C, DC> {
         let mut solution = Solution::default();
         let mut current = goal.state.clone();
+
+        // Check if we need to wait for the landmark to begin
+        if self.distance[&current] < config.task.goal_interval.start {
+            solution.states.push(current.clone());
+            solution.costs.push(config.task.goal_interval.start);
+            solution.actions.push(Action::wait(
+                config.task.goal_interval.start - self.distance[&current],
+            ));
+        }
 
         solution.states.push(current.clone());
         solution.costs.push(self.distance[&current]);
@@ -544,7 +586,8 @@ where
 {
     initial_times: Vec<C>,
     initial_states: Vec<Rc<SippState<S, C>>>,
-    goal_state: SippState<S, C>,
+    goal_state: S,
+    goal_interval: Interval<C>,
     internal_task: Arc<Task<S, C>>,
     _phantom: PhantomData<DC>,
 }
@@ -565,24 +608,23 @@ where
     pub fn new(
         initial_times: Vec<C>,
         initial_states: Vec<Rc<SippState<S, C>>>,
-        goal_state: SippState<S, C>,
+        goal_state: S,
+        goal_interval: Interval<C>,
         internal_task: Arc<Task<S, C>>,
     ) -> Self {
         SippTask {
             initial_times,
             initial_states,
             goal_state,
+            goal_interval,
             internal_task,
             _phantom: PhantomData::default(),
         }
     }
 
     fn is_goal(&self, state: &SearchNode<SippState<S, C>, C, DC>) -> bool {
-        state.cost >= self.goal_state.safe_interval.start
-            && state.cost < self.goal_state.safe_interval.end
-            && self
-                .internal_task
-                .is_goal_state(&state.state.internal_state)
+        self.internal_task
+            .is_goal_state(&state.state.internal_state)
     }
 }
 
@@ -694,14 +736,15 @@ mod tests {
             Interval::new(times[2], times[3]),
         )));
 
-        let safe_intervals = SafeIntervalPathPlanning::<
-            SimpleWorld,
-            SimpleState,
-            GraphEdgeId,
-            MyTime,
-            MyTime,
-            SimpleHeuristic,
-        >::get_safe_intervals(&Arc::new(constraints), &state);
+        let safe_intervals =
+            SafeIntervalPathPlanning::<
+                SimpleWorld,
+                SimpleState,
+                GraphEdgeId,
+                MyTime,
+                MyTime,
+                SimpleHeuristic,
+            >::get_safe_intervals(&Arc::new(constraints), &state, &Interval::default());
 
         assert_eq!(safe_intervals.len(), 3);
         assert_eq!(safe_intervals[0].end, times[0]);

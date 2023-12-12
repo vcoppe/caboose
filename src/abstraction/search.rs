@@ -417,6 +417,7 @@ where
 }
 
 /// Set of constraints that can be imposed on agents in a search algorithm.
+#[derive(Debug)]
 pub struct ConstraintSet<S, C>
 where
     S: State + Eq + Hash + Clone,
