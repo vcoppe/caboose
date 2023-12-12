@@ -113,7 +113,7 @@ where
                 .position(|pivot| pivot.is_equivalent(&task.goal_state)),
             task,
             heuristic_to_pivots,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -287,7 +287,7 @@ where
                     .start
                     .min(self.moves.1.interval.start)
                     .cmp(
-                        &&other
+                        &other
                             .moves
                             .0
                             .interval

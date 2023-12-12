@@ -314,30 +314,24 @@ where
 
         // Compute a new path for each agent, taking into account the new constraint
         let solutions = vec![
-            constraint_sets
-                .0
-                .map(|cs| {
-                    self.lsipp.solve(&LSippConfig::new_with_pivots(
-                        config.tasks[agents[0]].clone(),
-                        cs.0.clone(),
-                        cs.1,
-                        config.pivots.clone(),
-                        config.heuristic_to_pivots.clone(),
-                    ))
-                })
-                .flatten(),
-            constraint_sets
-                .1
-                .map(|cs| {
-                    self.lsipp.solve(&LSippConfig::new_with_pivots(
-                        config.tasks[agents[1]].clone(),
-                        cs.0,
-                        cs.1,
-                        config.pivots.clone(),
-                        config.heuristic_to_pivots.clone(),
-                    ))
-                })
-                .flatten(),
+            constraint_sets.0.and_then(|cs| {
+                self.lsipp.solve(&LSippConfig::new_with_pivots(
+                    config.tasks[agents[0]].clone(),
+                    cs.0.clone(),
+                    cs.1,
+                    config.pivots.clone(),
+                    config.heuristic_to_pivots.clone(),
+                ))
+            }),
+            constraint_sets.1.and_then(|cs| {
+                self.lsipp.solve(&LSippConfig::new_with_pivots(
+                    config.tasks[agents[1]].clone(),
+                    cs.0,
+                    cs.1,
+                    config.pivots.clone(),
+                    config.heuristic_to_pivots.clone(),
+                ))
+            }),
         ];
 
         (successors, solutions, constraints)
@@ -467,7 +461,7 @@ where
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &CbsNode<S, A, C, DC>,
-        solutions: &Vec<&Solution<Arc<SippState<S, C>>, A, C, DC>>,
+        solutions: &[&Solution<Arc<SippState<S, C>>, A, C, DC>],
         agents: A2<usize>,
     ) -> Option<(Conflict<S, A, C, DC>, bool)> {
         let mut conflict = None;
@@ -503,9 +497,8 @@ where
                         solutions[agents[0]]
                             .actions
                             .get(index[0])
-                            .map(|a| a.action)
-                            .flatten(),
-                        intervals[0].clone(),
+                            .and_then(|a| a.action),
+                        intervals[0],
                     ),
                     Move::new(
                         agents[1],
@@ -520,9 +513,8 @@ where
                         solutions[agents[1]]
                             .actions
                             .get(index[1])
-                            .map(|a| a.action)
-                            .flatten(),
-                        intervals[1].clone(),
+                            .and_then(|a| a.action),
+                        intervals[1],
                     ),
                 );
 
@@ -655,7 +647,7 @@ where
             pivots,
             heuristic_to_pivots,
             collision_precision,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -734,7 +726,7 @@ where
         loop {
             if let Some(constraint) = &current.constraint {
                 if constraint.agent == agent {
-                    constraints.add(&constraint);
+                    constraints.add(constraint);
                 }
             }
             if let Some(T2(from, to)) = &current.landmark {
@@ -768,7 +760,7 @@ where
         loop {
             if let Some(constraint) = &current.constraint {
                 if constraint.agent == agent {
-                    constraints.add(&constraint);
+                    constraints.add(constraint);
                 }
             }
             if let Some(T2(from, to)) = &current.landmark {
@@ -802,9 +794,9 @@ where
                     found += 1;
                 }
             } else {
-                for agent in 0..n_agents {
-                    if solutions[agent].is_none() {
-                        solutions[agent] = Some(&current.solutions[agent]);
+                for (agent, solution) in solutions.iter_mut().enumerate() {
+                    if solution.is_none() {
+                        *solution = Some(&current.solutions[agent]);
                         found += 1;
                     }
                 }

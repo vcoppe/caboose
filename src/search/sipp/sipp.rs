@@ -81,7 +81,7 @@ where
             parent: FxHashMap::default(),
             goal_intervals: BTreeSet::default(),
             stats: SippStats::default(),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -132,8 +132,7 @@ where
         config: &SippConfig<TS, S, A, C, DC, H>,
     ) -> Option<Solution<Rc<SippState<S, C>>, A, C, DC>> {
         self.to_generalized(config, true)
-            .map(|config| self.solve_generalized(&config).pop())
-            .flatten()
+            .and_then(|config| self.solve_generalized(&config).pop())
     }
     /// Attempts to solve the given generalized configuration, and returns the optimal solution if any.
     pub fn solve_generalized(
@@ -192,7 +191,7 @@ where
 
         self.stats.searches += 1;
 
-        return true;
+        true
     }
 
     /// Finds all shortest paths from the initial states to any reachable safe interval
@@ -243,10 +242,10 @@ where
         {
             let successor_state = self
                 .transition_system
-                .transition(&current.state.internal_state, &action);
+                .transition(&current.state.internal_state, action);
             let transition_cost = self
                 .transition_system
-                .transition_cost(&current.state.internal_state, &action);
+                .transition_cost(&current.state.internal_state, action);
 
             let heuristic = config.heuristic.get_heuristic(&successor_state);
             if heuristic.is_none() {
@@ -296,14 +295,11 @@ where
                 }
 
                 // Check collision along the action
-                if let Some(collision_interval) = action_constraints
-                    .map(|col| {
-                        col.iter()
-                            .find(|c| c.interval.end > successor_cost - transition_cost)
-                            .map(|c| c.interval)
-                    })
-                    .flatten()
-                {
+                if let Some(collision_interval) = action_constraints.and_then(|col| {
+                    col.iter()
+                        .find(|c| c.interval.end > successor_cost - transition_cost)
+                        .map(|c| c.interval)
+                }) {
                     if successor_cost - transition_cost >= collision_interval.start {
                         // Collision detected
                         if !self
@@ -496,7 +492,7 @@ where
             interval,
             constraints,
             heuristic,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -552,7 +548,7 @@ where
             constraints,
             heuristic,
             single_path,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -618,7 +614,7 @@ where
             goal_state,
             goal_interval,
             internal_task,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 

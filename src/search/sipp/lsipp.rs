@@ -88,7 +88,7 @@ where
         if config.landmarks.is_empty() {
             // No landmarks, just solve the task with SIPP
             self.sipp
-                .solve(&mut SippConfig::new(
+                .solve(&SippConfig::new(
                     config.task.clone(),
                     Default::default(),
                     config.constraints.clone(),
@@ -97,9 +97,9 @@ where
                 .map(Self::map_to_arcs)
         } else {
             // Solve the task with landmarks
-            self.to_first_landmark(&config);
-            self.between_landmarks(&config);
-            self.to_goal(&config);
+            self.to_first_landmark(config);
+            self.between_landmarks(config);
+            self.to_goal(config);
             self.get_solution()
         }
     }
@@ -112,9 +112,9 @@ where
             config.task.initial_cost,
         ));
         let config = self.sipp.to_generalized(
-            &mut SippConfig::new(
+            &SippConfig::new(
                 task.clone(),
-                config.landmarks[0].interval.clone(),
+                config.landmarks[0].interval,
                 config.constraints.clone(),
                 self.get_heuristic(config, task),
             ),
@@ -151,7 +151,7 @@ where
                         .map(|s| s.states.last().unwrap().clone())
                         .collect(),
                     landmark.state.clone(),
-                    landmark.interval.clone(),
+                    landmark.interval,
                     task.clone(),
                 ),
                 config.constraints.clone(),
@@ -341,7 +341,7 @@ where
             landmarks,
             pivots: Arc::new(vec![task.goal_state.clone()]),
             heuristic_to_pivots: Arc::new(vec![heuristic]),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -358,7 +358,7 @@ where
             landmarks,
             pivots,
             heuristic_to_pivots,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 }
