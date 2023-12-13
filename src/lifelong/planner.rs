@@ -82,7 +82,7 @@ where
             )));
             // Each agent stands still at its initial position.
             solutions.push(Solution {
-                cost: initial_cost,
+                cost: C::default(),
                 steps: vec![(
                     Arc::new(SippState {
                         safe_interval: Interval::default(),
