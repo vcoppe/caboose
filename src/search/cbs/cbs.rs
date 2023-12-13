@@ -145,9 +145,8 @@ where
 
             // Find the conflict with the highest priority
             let conflict = node.conflicts.iter().min().unwrap();
-            for successor in self.branch_on(config, &node, conflict).drain(..) {
-                self.enqueue(config, successor);
-            }
+            // And branch on it
+            self.branch_on(config, &node, conflict);
         }
 
         None
@@ -161,9 +160,7 @@ where
             if !node.conflicts.is_empty() {
                 // Find the conflict with the highest priority
                 let conflict = node.conflicts.iter().min().unwrap();
-                for successor in self.branch_on(config, &node, conflict).drain(..) {
-                    self.enqueue(config, successor);
-                }
+                self.branch_on(config, &node, conflict);
             }
 
             Some(node)
@@ -172,12 +169,13 @@ where
         }
     }
 
+    /// Branches on the given conflict, creating two successor nodes (if feasible).
     fn branch_on(
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &Arc<CbsNode<S, A, C, DC>>,
         conflict: &Conflict<S, A, C, DC>,
-    ) -> Vec<CbsNode<S, A, C, DC>> {
+    ) {
         // Get the agents involved in the conflict
         let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
 
@@ -189,7 +187,6 @@ where
             self.get_successors(config, node, conflict);
 
         let mut landmark_added = false;
-        let mut valid_successors = vec![];
         for (i, (successor, solution)) in successors.drain(..).zip(solutions.drain(..)).enumerate()
         {
             if let (Some(mut successor), Some(solution)) = (successor, solution) {
@@ -236,13 +233,11 @@ where
                     continue;
                 }
 
-                valid_successors.push(successor);
+                self.enqueue(config, successor);
             }
         }
 
         self.stats.expanded += 1;
-
-        valid_successors
     }
 
     /// Computes the successor nodes, the new constraints and the new solutions for the given conflict.
@@ -422,7 +417,7 @@ where
                 }
 
                 if let Some((conflict, avoidable)) =
-                    self.get_conflicts(config, node, &solutions, T2(agent, other))
+                    self.get_conflict(config, node, &solutions, T2(agent, other))
                 {
                     if !avoidable {
                         return false;
@@ -435,7 +430,7 @@ where
             for i in 0..config.n_agents {
                 for j in i + 1..config.n_agents {
                     if let Some((conflict, avoidable)) =
-                        self.get_conflicts(config, node, &solutions, T2(i, j))
+                        self.get_conflict(config, node, &solutions, T2(i, j))
                     {
                         if !avoidable {
                             return false;
@@ -446,15 +441,13 @@ where
             }
         }
 
-        conflicts
-            .drain(..)
-            .for_each(|conflict| node.conflicts.push(conflict));
+        node.conflicts = conflicts;
 
         true
     }
 
     /// Returns the first conflict between the given solutions, if any, and whether it can be avoided.
-    fn get_conflicts(
+    fn get_conflict(
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &CbsNode<S, A, C, DC>,
