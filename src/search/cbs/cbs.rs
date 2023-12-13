@@ -102,8 +102,7 @@ where
         for (agent, task) in config.tasks.iter().enumerate() {
             if config.frozen.contains_key(&agent) {
                 let solution = config.frozen[&agent].clone();
-                root.total_cost =
-                    *solution.costs.last().unwrap() + root.total_cost - task.initial_cost;
+                root.total_cost = solution.cost + root.total_cost - task.initial_cost;
                 root.solutions.push(solution);
                 continue;
             }
@@ -117,8 +116,7 @@ where
             );
 
             if let Some(solution) = self.lsipp.solve(&config) {
-                root.total_cost =
-                    *solution.costs.last().unwrap() + root.total_cost - task.initial_cost;
+                root.total_cost = solution.cost + root.total_cost - task.initial_cost;
                 root.solutions.push(solution);
             } else {
                 return None;
@@ -199,9 +197,8 @@ where
                 successor.parent = Some(node.clone());
 
                 // Update the total cost of the successor node
-                successor.total_cost = node.total_cost
-                    - (*current_solutions[agents[i]].costs.last().unwrap()
-                        - *solution.costs.last().unwrap());
+                successor.total_cost =
+                    node.total_cost - (current_solutions[agents[i]].cost - solution.cost);
 
                 // Add the solution to the successor node
                 successor.solutions.push(solution);
@@ -472,9 +469,9 @@ where
         loop {
             // Compute the interval of each move
             for k in 0..=1 {
-                intervals[k].start = solutions[agents[k]].costs[index[k]];
+                intervals[k].start = solutions[agents[k]].steps[index[k]].1;
                 intervals[k].end = if index[k] < solutions[agents[k]].actions.len() {
-                    solutions[agents[k]].costs[index[k] + 1]
+                    solutions[agents[k]].steps[index[k] + 1].1
                 } else {
                     C::max_value()
                 };
@@ -486,13 +483,19 @@ where
                 let moves = T2(
                     Move::new(
                         agents[0],
-                        solutions[agents[0]].states[index[0]].internal_state.clone(),
+                        solutions[agents[0]].steps[index[0]]
+                            .0
+                            .internal_state
+                            .clone(),
                         solutions[agents[0]]
-                            .states
+                            .steps
                             .get(index[0] + 1)
-                            .map(|s| s.internal_state.clone())
+                            .map(|s| s.0.internal_state.clone())
                             .unwrap_or(
-                                solutions[agents[0]].states[index[0]].internal_state.clone(),
+                                solutions[agents[0]].steps[index[0]]
+                                    .0
+                                    .internal_state
+                                    .clone(),
                             ),
                         solutions[agents[0]]
                             .actions
@@ -502,13 +505,19 @@ where
                     ),
                     Move::new(
                         agents[1],
-                        solutions[agents[1]].states[index[1]].internal_state.clone(),
+                        solutions[agents[1]].steps[index[1]]
+                            .0
+                            .internal_state
+                            .clone(),
                         solutions[agents[1]]
-                            .states
+                            .steps
                             .get(index[1] + 1)
-                            .map(|s| s.internal_state.clone())
+                            .map(|s| s.0.internal_state.clone())
                             .unwrap_or(
-                                solutions[agents[1]].states[index[1]].internal_state.clone(),
+                                solutions[agents[1]].steps[index[1]]
+                                    .0
+                                    .internal_state
+                                    .clone(),
                             ),
                         solutions[agents[1]]
                             .actions
@@ -541,16 +550,14 @@ where
             if let (None, None) = (&new_solutions[0], &new_solutions[1]) {
                 return Some((conflict, false));
             } else if let (Some(solution), None) = (&new_solutions[0], &new_solutions[1]) {
-                conflict.overcost =
-                    *solution.costs.last().unwrap() - *solutions[agents[0]].costs.last().unwrap();
+                conflict.overcost = solution.cost - solutions[agents[0]].cost;
                 if config.frozen.contains_key(&agents[1]) {
                     conflict.type_ = ConflictType::Frozen;
                 } else {
                     conflict.type_ = ConflictType::Cardinal;
                 }
             } else if let (None, Some(solution)) = (&new_solutions[0], &new_solutions[1]) {
-                conflict.overcost =
-                    *solution.costs.last().unwrap() - *solutions[agents[1]].costs.last().unwrap();
+                conflict.overcost = solution.cost - solutions[agents[1]].cost;
                 if config.frozen.contains_key(&agents[0]) {
                     conflict.type_ = ConflictType::Frozen;
                 } else {
@@ -559,10 +566,8 @@ where
             } else if let (Some(solution1), Some(solution2)) =
                 (&new_solutions[0], &new_solutions[1])
             {
-                let overcost1 =
-                    *solution1.costs.last().unwrap() - *solutions[agents[0]].costs.last().unwrap();
-                let overcost2 =
-                    *solution2.costs.last().unwrap() - *solutions[agents[1]].costs.last().unwrap();
+                let overcost1 = solution1.cost - solutions[agents[0]].cost;
+                let overcost2 = solution2.cost - solutions[agents[1]].cost;
                 if overcost1 > DC::default() && overcost2 > DC::default() {
                     conflict.overcost = overcost1.min(overcost2);
                     conflict.type_ = ConflictType::Cardinal;
@@ -1006,8 +1011,7 @@ mod tests {
         assert_eq!(
             solutions
                 .iter()
-                .zip(config.tasks.iter())
-                .map(|(sol, task)| *sol.costs.last().unwrap() - task.initial_cost)
+                .map(|sol| sol.cost)
                 .sum::<OrderedFloat<f32>>(),
             OrderedFloat(20.0)
         );
@@ -1043,7 +1047,7 @@ mod tests {
 
         let mut solutions = solver.solve(&config).unwrap();
 
-        assert_eq!(*solutions[0].costs.last().unwrap(), OrderedFloat(9.0));
+        assert_eq!(solutions[0].cost, OrderedFloat(9.0));
 
         tasks.push(Arc::new(Task::new(
             SimpleState(GraphNodeId(9)),
@@ -1067,10 +1071,9 @@ mod tests {
 
         let solutions = solver.solve(&config).unwrap();
 
-        assert_eq!(*solutions[0].costs.last().unwrap(), OrderedFloat(9.0));
-        assert_eq!(*solutions[1].costs.last().unwrap(), OrderedFloat(11.0));
+        assert_eq!(solutions[0].cost, OrderedFloat(9.0));
+        assert_eq!(solutions[1].cost, OrderedFloat(11.0));
 
-        assert_eq!(solutions[0].states, config.frozen[&0].states);
-        assert_eq!(solutions[0].costs, config.frozen[&0].costs);
+        assert_eq!(solutions[0].steps, config.frozen[&0].steps);
     }
 }

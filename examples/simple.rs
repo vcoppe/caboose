@@ -23,7 +23,7 @@ struct Model {
 }
 
 fn main() {
-    if true {
+    if false {
         nannou::app(model).update(update).run();
     } else {
         let mut model = get_model();
@@ -35,11 +35,7 @@ fn main() {
         if let Some(solution) = solution {
             println!(
                 "Solution cost: {}",
-                solution
-                    .iter()
-                    .map(|sol| *sol.costs.last().unwrap() - *sol.costs.first().unwrap())
-                    .sum::<MyTime>()
-                    .0
+                solution.iter().map(|sol| sol.cost).sum::<MyTime>().0
             );
         } else {
             println!("No solution found");
@@ -262,9 +258,9 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     let solutions = model.nodes[model.index].get_solutions(model.config.n_agents);
 
-    let max_elapsed_time = *solutions
+    let max_elapsed_time = solutions
         .iter()
-        .map(|solution| solution.costs.last().unwrap())
+        .map(|solution| solution.cost)
         .max()
         .unwrap()
         - initial_time;
@@ -276,14 +272,14 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     for (agent, solution) in solutions.iter().enumerate() {
         let mut drawn = false;
-        for i in 0..(solution.costs.len() - 1) {
-            if current_time >= solution.costs[i] && current_time <= solution.costs[i + 1] {
-                let from = to_coordinate(solution.states[i].internal_state.0);
-                let to = to_coordinate(solution.states[i + 1].internal_state.0);
+        for i in 0..(solution.steps.len() - 1) {
+            if current_time >= solution.steps[i].1 && current_time <= solution.steps[i + 1].1 {
+                let from = to_coordinate(solution.steps[i].0.internal_state.0);
+                let to = to_coordinate(solution.steps[i + 1].0.internal_state.0);
 
                 let delta = to - from;
-                let progress_time = current_time - solution.costs[i];
-                let move_time = solution.costs[i + 1] - solution.costs[i];
+                let progress_time = current_time - solution.steps[i].1;
+                let move_time = solution.steps[i + 1].1 - solution.steps[i].1;
                 let vel = delta / move_time.0;
                 let center = from + vel * progress_time.0;
 
@@ -301,7 +297,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
         }
 
         if !drawn {
-            let center = to_coordinate(solution.states.last().unwrap().internal_state.0);
+            let center = to_coordinate(solution.steps.last().unwrap().0.internal_state.0);
             draw.ellipse()
                 .color(model.colors[agent])
                 .radius(0.4 * model.scale)

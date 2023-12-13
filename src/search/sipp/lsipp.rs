@@ -142,13 +142,10 @@ where
             ));
             let config = GeneralizedSippConfig::new(
                 SippTask::new(
+                    self.solutions.iter().map(|s| s.cost).collect(),
                     self.solutions
                         .iter()
-                        .map(|s| *s.costs.last().unwrap())
-                        .collect(),
-                    self.solutions
-                        .iter()
-                        .map(|s| s.states.last().unwrap().clone())
+                        .map(|s| s.steps.last().unwrap().0.clone())
                         .collect(),
                     landmark.state.clone(),
                     landmark.interval,
@@ -174,13 +171,10 @@ where
         ));
         let config = GeneralizedSippConfig::new(
             SippTask::new(
+                self.solutions.iter().map(|s| s.cost).collect(),
                 self.solutions
                     .iter()
-                    .map(|s| *s.costs.last().unwrap())
-                    .collect(),
-                self.solutions
-                    .iter()
-                    .map(|s| s.states.last().unwrap().clone())
+                    .map(|s| s.steps.last().unwrap().0.clone())
                     .collect(),
                 config.task.goal_state.clone(),
                 Interval::default(),
@@ -202,19 +196,13 @@ where
     /// Stores the parent of each state in the solutions
     fn store_parents(&mut self) {
         for solution in self.solutions.iter() {
-            for (i, (state, cost)) in solution
-                .states
-                .iter()
-                .zip(solution.costs.iter())
-                .enumerate()
-                .skip(1)
-            {
+            for (i, (state, cost)) in solution.steps.iter().enumerate().skip(1) {
                 self.parent.insert(
                     (state.clone(), *cost),
                     (
                         solution.actions[i - 1],
-                        solution.states[i - 1].clone(),
-                        solution.costs[i - 1],
+                        solution.steps[i - 1].0.clone(),
+                        solution.steps[i - 1].1,
                     ),
                 );
             }
@@ -230,25 +218,23 @@ where
         let solution_to_goal = &self.solutions[0];
 
         let mut solution = Solution::default();
-        let mut current_state = solution_to_goal.states.last().unwrap().clone();
-        let mut current_cost = *solution_to_goal.costs.last().unwrap();
+        let mut current_state = solution_to_goal.steps.last().unwrap().0.clone();
+        let mut current_cost = solution_to_goal.cost;
 
-        solution.states.push(current_state.clone());
-        solution.costs.push(current_cost);
+        solution.steps.push((current_state.clone(), current_cost));
 
         while let Some((action, parent_state, parent_cost)) =
             self.parent.get(&(current_state, current_cost))
         {
             current_state = parent_state.clone();
             current_cost = *parent_cost;
-            solution.states.push(current_state.clone());
-            solution.costs.push(current_cost);
+            solution.steps.push((current_state.clone(), current_cost));
             solution.actions.push(*action);
         }
 
-        solution.states.reverse();
-        solution.costs.reverse();
+        solution.steps.reverse();
         solution.actions.reverse();
+        solution.cost = solution_to_goal.cost;
 
         Some(Self::map_to_arcs(solution))
     }
@@ -257,12 +243,12 @@ where
         solution: Solution<Rc<SippState<S, C>>, A, C, DC>,
     ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
         Solution {
-            states: solution
-                .states
-                .into_iter()
-                .map(|s| Arc::new(s.as_ref().clone()))
+            cost: solution.cost,
+            steps: solution
+                .steps
+                .iter()
+                .map(|s| (Arc::new(s.0.as_ref().clone()), s.1))
                 .collect::<Vec<_>>(),
-            costs: solution.costs,
             actions: solution.actions,
         }
     }
@@ -436,7 +422,7 @@ mod tests {
                 let solution = solver.solve(&config).unwrap();
                 let after = solver.get_stats();
                 assert_eq!(
-                    *solution.costs.last().unwrap(),
+                    solution.cost,
                     OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
                 assert_eq!(after.searches, before.searches + 1);
@@ -481,10 +467,7 @@ mod tests {
         let before = solver.get_stats();
         let solution = solver.solve(&config).unwrap();
         let after = solver.get_stats();
-        assert_eq!(
-            *solution.costs.last().unwrap(),
-            OrderedFloat((4 * (size - 1)) as f32)
-        );
+        assert_eq!(solution.cost, OrderedFloat((4 * (size - 1)) as f32));
         assert_eq!(after.searches, before.searches + 1);
         assert_eq!(after.sipp_stats.searches, before.sipp_stats.searches + 3);
     }

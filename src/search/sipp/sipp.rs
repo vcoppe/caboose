@@ -403,38 +403,40 @@ where
 
         // Check if we need to wait for the landmark to begin
         if self.distance[&current] < config.task.goal_interval.start {
-            solution.states.push(current.clone());
-            solution.costs.push(config.task.goal_interval.start);
+            solution
+                .steps
+                .push((current.clone(), config.task.goal_interval.start));
             solution.actions.push(Action::wait(
                 config.task.goal_interval.start - self.distance[&current],
             ));
         }
 
-        solution.states.push(current.clone());
-        solution.costs.push(self.distance[&current]);
+        solution
+            .steps
+            .push((current.clone(), self.distance[&current]));
 
         while let Some((action, parent)) = self.parent.get(&current) {
             if self.distance[&current] - self.distance[parent] > action.cost {
-                solution.states.push(parent.clone());
-                solution.costs.push(self.distance[&current] - action.cost);
+                solution
+                    .steps
+                    .push((parent.clone(), self.distance[&current] - action.cost));
                 solution.actions.push(*action);
 
                 // Insert wait action
-                solution.states.push(parent.clone());
-                solution.costs.push(self.distance[parent]);
+                solution.steps.push((parent.clone(), self.distance[parent]));
                 solution.actions.push(Action::wait(action.cost));
             } else {
-                solution.states.push(parent.clone());
-                solution.costs.push(self.distance[parent]);
+                solution.steps.push((parent.clone(), self.distance[parent]));
                 solution.actions.push(*action);
             }
 
             current = parent.clone();
         }
 
-        solution.costs.reverse();
+        solution.steps.reverse();
         solution.actions.reverse();
-        solution.states.reverse();
+
+        solution.cost = solution.steps.last().unwrap().1;
 
         solution
     }
@@ -701,7 +703,7 @@ mod tests {
                 let solution = solver.solve(&config).unwrap();
                 let after = solver.get_stats();
                 assert_eq!(
-                    *solution.costs.last().unwrap(),
+                    solution.cost,
                     OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
                 );
                 assert_eq!(after.searches, before.searches + 1);
@@ -811,6 +813,6 @@ mod tests {
 
         let solution = solver.solve(&config).unwrap();
 
-        assert_eq!(*solution.costs.last().unwrap(), OrderedFloat(24.0));
+        assert_eq!(solution.cost, OrderedFloat(24.0));
     }
 }

@@ -38,8 +38,8 @@ pub struct Solution<S, A, C, DC>
 where
     C: Default,
 {
-    pub states: Vec<S>,
-    pub costs: Vec<C>,
+    pub cost: C,
+    pub steps: Vec<(S, C)>,
     pub actions: Vec<Action<A, DC>>,
 }
 
@@ -49,8 +49,8 @@ where
 {
     fn default() -> Self {
         Self {
-            states: Default::default(),
-            costs: Default::default(),
+            cost: C::default(),
+            steps: Default::default(),
             actions: Default::default(),
         }
     }

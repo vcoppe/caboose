@@ -80,12 +80,16 @@ where
                 task.clone(),
                 H::build(transition_system.clone(), Arc::new(task.reverse())),
             )));
+            // Each agent stands still at its initial position.
             solutions.push(Solution {
-                states: vec![Arc::new(SippState {
-                    safe_interval: Interval::default(),
-                    internal_state: initial_state,
-                })],
-                costs: vec![initial_cost],
+                cost: initial_cost,
+                steps: vec![(
+                    Arc::new(SippState {
+                        safe_interval: Interval::default(),
+                        internal_state: initial_state,
+                    }),
+                    initial_cost,
+                )],
                 actions: vec![],
             });
             tasks.push(task);
@@ -129,9 +133,7 @@ where
             }
         }
 
-        let solutions = self.solver.solve(&cbs_config);
-
-        if let Some(solutions) = solutions {
+        if let Some(solutions) = self.solver.solve(&cbs_config) {
             self.solutions = solutions;
             Some(&self.solutions)
         } else {
@@ -237,10 +239,7 @@ mod tests {
 
         let solutions = planner.plan(&config).unwrap();
 
-        assert_eq!(
-            *solutions[0].costs.last().unwrap() + *solutions[2].costs.last().unwrap(),
-            OrderedFloat(17.0)
-        );
+        assert_eq!(solutions[0].cost + solutions[2].cost, OrderedFloat(17.0));
         assert!(solutions[1].actions.is_empty());
     }
 }
