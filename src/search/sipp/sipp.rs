@@ -48,6 +48,7 @@ where
     closed: FxHashSet<Rc<SippState<S, C>>>,
     parent: FxHashMap<Rc<SippState<S, C>>, (Action<A, DC>, Rc<SippState<S, C>>)>,
     goal_intervals: BTreeSet<Interval<C>>,
+    safe_intervals: Vec<Interval<C>>,
     stats: SippStats,
     _phantom: PhantomData<(A, H)>,
 }
@@ -80,6 +81,7 @@ where
             closed: FxHashSet::default(),
             parent: FxHashMap::default(),
             goal_intervals: BTreeSet::default(),
+            safe_intervals: vec![],
             stats: SippStats::default(),
             _phantom: PhantomData,
         }
@@ -88,25 +90,26 @@ where
     /// Transforms the configuration into a generalized configuration, if any
     /// safe intervals exist for the initial state.
     pub fn to_generalized(
-        &self,
+        &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
         single_path: bool,
     ) -> Option<GeneralizedSippConfig<TS, S, A, C, DC, H>> {
         let initial_time = config.task.initial_cost;
 
         // Find the safe interval in which the initial time is contained
-        let safe_intervals = Self::get_safe_intervals(
+        Self::get_safe_intervals(
             &config.constraints,
             &config.task.initial_state,
             &Interval::new(initial_time, initial_time),
+            &mut self.safe_intervals,
         );
 
-        if safe_intervals.is_empty() || safe_intervals[0].start > initial_time {
+        if self.safe_intervals.is_empty() || self.safe_intervals[0].start > initial_time {
             return None;
         }
 
         let initial_state = Rc::new(SippState {
-            safe_interval: safe_intervals[0],
+            safe_interval: self.safe_intervals.pop().unwrap(),
             internal_state: config.task.initial_state.clone(),
         });
 
@@ -177,15 +180,16 @@ where
         }
 
         // Find the safe intervals at the goal state
-        let mut safe_intervals = Self::get_safe_intervals(
+        Self::get_safe_intervals(
             &config.constraints,
             &config.task.goal_state,
             &config.task.goal_interval,
+            &mut self.safe_intervals,
         );
-        if safe_intervals.is_empty() {
+        if self.safe_intervals.is_empty() {
             return false;
         }
-        safe_intervals.drain(..).for_each(|i| {
+        self.safe_intervals.drain(..).for_each(|i| {
             self.goal_intervals.insert(i);
         });
 
@@ -264,13 +268,13 @@ where
 
             // Try to reach any of the safe intervals of the destination state
             // and add the corresponding successors to the queue if a better path has been found
-            for safe_interval in Self::get_safe_intervals(
+            Self::get_safe_intervals(
                 &config.constraints,
                 &successor_state,
                 &Interval::new(current.cost + transition_cost, C::max_value()),
-            )
-            .drain(..)
-            {
+                &mut self.safe_intervals,
+            );
+            for safe_interval in self.safe_intervals.drain(..) {
                 let mut successor_cost = current.cost + transition_cost;
 
                 if successor_cost >= safe_interval.end {
@@ -296,9 +300,10 @@ where
 
                 // Check collision along the action
                 if let Some(collision_interval) = action_constraints.and_then(|col| {
-                    col.iter()
-                        .find(|c| c.interval.end > successor_cost - transition_cost)
-                        .map(|c| c.interval)
+                    col.get(
+                        col.partition_point(|c| c.interval.end <= successor_cost - transition_cost),
+                    )
+                    .map(|c| c.interval)
                 }) {
                     if successor_cost - transition_cost >= collision_interval.start {
                         // Collision detected
@@ -361,16 +366,15 @@ where
         }
     }
 
-    /// Returns the safe intervals for the given state, given a set of constraints,
+    /// Computes the safe intervals for the given state, given a set of constraints,
     /// and that overlap with the given interval.
     fn get_safe_intervals(
         constraints: &Arc<ConstraintSet<S, C>>,
         state: &S,
         range: &Interval<C>,
-    ) -> Vec<Interval<C>> {
+        safe_intervals: &mut Vec<Interval<C>>,
+    ) {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
-            let mut safe_intervals = vec![];
-
             let mut current = Interval::default();
             for constraint in state_constraints.iter() {
                 current.end = constraint.interval.start;
@@ -380,13 +384,11 @@ where
                 current.start = constraint.interval.end;
             }
             current.end = Interval::default().end;
-            if current.start < current.end {
+            if current.start < current.end && current.overlaps(range) {
                 safe_intervals.push(current);
             }
-
-            safe_intervals
         } else {
-            vec![Interval::default()]
+            safe_intervals.push(Interval::default());
         }
     }
 
@@ -732,15 +734,21 @@ mod tests {
             Interval::new(times[2], times[3]),
         )));
 
-        let safe_intervals =
-            SafeIntervalPathPlanning::<
-                SimpleWorld,
-                SimpleState,
-                GraphEdgeId,
-                MyTime,
-                MyTime,
-                SimpleHeuristic,
-            >::get_safe_intervals(&Arc::new(constraints), &state, &Interval::default());
+        let mut safe_intervals = vec![];
+
+        SafeIntervalPathPlanning::<
+            SimpleWorld,
+            SimpleState,
+            GraphEdgeId,
+            MyTime,
+            MyTime,
+            SimpleHeuristic,
+        >::get_safe_intervals(
+            &Arc::new(constraints),
+            &state,
+            &Interval::default(),
+            &mut safe_intervals,
+        );
 
         assert_eq!(safe_intervals.len(), 3);
         assert_eq!(safe_intervals[0].end, times[0]);
