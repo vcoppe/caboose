@@ -125,13 +125,7 @@ where
 
         data.stats.new_query += 1;
 
-        loop {
-            let current = data.queue.pop();
-            if current.is_none() {
-                break;
-            }
-
-            let current = current.unwrap().0;
+        while let Some(Reverse(current)) = data.queue.pop() {
             data.closed.insert(current.state.clone()); // Mark the state as closed because the optimal distance has been found
 
             if current.cost > data.distance[&current.state] {
