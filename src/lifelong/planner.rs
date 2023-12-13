@@ -15,9 +15,9 @@ use crate::{
 /// A lifelong planner that uses Conflict-Based Search under the hood.
 pub struct Planner<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash + Clone,
-    A: Debug + Copy,
+    TS: TransitionSystem<S, A, C, DC> + Send + Sync,
+    S: Debug + State + Eq + Hash + Clone + Send + Sync,
+    A: Debug + Copy + Send + Sync,
     C: Debug
         + Hash
         + Eq
@@ -28,9 +28,11 @@ where
         + Sub<C, Output = DC>
         + Copy
         + Default
-        + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default,
-    H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC>,
+        + LimitValues
+        + Send
+        + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
 {
     transition_system: Arc<TS>,
     solver: ConflictBasedSearch<TS, S, A, C, DC, H>,
@@ -42,9 +44,9 @@ where
 
 impl<TS, S, A, C, DC, H> Planner<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash + Clone,
-    A: Debug + Copy,
+    TS: TransitionSystem<S, A, C, DC> + Send + Sync,
+    S: Debug + State + Eq + Hash + Clone + Send + Sync,
+    A: Debug + Copy + Send + Sync,
     C: Debug
         + Hash
         + Eq
@@ -55,9 +57,11 @@ where
         + Sub<C, Output = DC>
         + Copy
         + Default
-        + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default,
-    H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC>,
+        + LimitValues
+        + Send
+        + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
 {
     pub fn new(
         transition_system: Arc<TS>,

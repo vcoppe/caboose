@@ -7,8 +7,7 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
-    ops::{Add, Sub},
-    rc::Rc,
+    ops::{Add, AddAssign, Sub},
     sync::Arc,
     vec,
 };
@@ -44,9 +43,9 @@ where
 {
     transition_system: Arc<TS>,
     queue: BinaryHeap<Reverse<SearchNode<SippState<S, C>, C, DC>>>,
-    distance: FxHashMap<Rc<SippState<S, C>>, C>,
-    closed: FxHashSet<Rc<SippState<S, C>>>,
-    parent: FxHashMap<Rc<SippState<S, C>>, (Action<A, DC>, Rc<SippState<S, C>>)>,
+    distance: FxHashMap<Arc<SippState<S, C>>, C>,
+    closed: FxHashSet<Arc<SippState<S, C>>>,
+    parent: FxHashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
     goal_intervals: BTreeSet<Interval<C>>,
     safe_intervals: Vec<Interval<C>>,
     stats: SippStats,
@@ -108,7 +107,7 @@ where
             return None;
         }
 
-        let initial_state = Rc::new(SippState {
+        let initial_state = Arc::new(SippState {
             safe_interval: self.safe_intervals.pop().unwrap(),
             internal_state: config.task.initial_state.clone(),
         });
@@ -133,7 +132,7 @@ where
     pub fn solve(
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Rc<SippState<S, C>>, A, C, DC>> {
+    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         self.to_generalized(config, true)
             .and_then(|config| self.solve_generalized(&config).pop())
     }
@@ -141,7 +140,7 @@ where
     pub fn solve_generalized(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-    ) -> Vec<Solution<Rc<SippState<S, C>>, A, C, DC>> {
+    ) -> Vec<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         if !self.init(config) {
             return vec![];
         }
@@ -329,7 +328,7 @@ where
                     continue;
                 }
 
-                let successor_state = Rc::new(SippState {
+                let successor_state = Arc::new(SippState {
                     safe_interval,
                     internal_state: successor_state.clone(),
                 });
@@ -397,7 +396,7 @@ where
         &self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
         goal: &SearchNode<SippState<S, C>, C, DC>,
-    ) -> Solution<Rc<SippState<S, C>>, A, C, DC> {
+    ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
         let mut solution = Solution::default();
         let mut current = goal.state.clone();
 
@@ -585,7 +584,7 @@ where
     DC: Copy,
 {
     initial_times: Vec<C>,
-    initial_states: Vec<Rc<SippState<S, C>>>,
+    initial_states: Vec<Arc<SippState<S, C>>>,
     goal_state: S,
     goal_interval: Interval<C>,
     internal_task: Arc<Task<S, C>>,
@@ -607,7 +606,7 @@ where
 {
     pub fn new(
         initial_times: Vec<C>,
-        initial_states: Vec<Rc<SippState<S, C>>>,
+        initial_states: Vec<Arc<SippState<S, C>>>,
         goal_state: S,
         goal_interval: Interval<C>,
         internal_task: Arc<Task<S, C>>,
@@ -633,6 +632,13 @@ where
 pub struct SippStats {
     pub searches: usize,
     pub expanded: usize,
+}
+
+impl AddAssign for SippStats {
+    fn add_assign(&mut self, rhs: Self) {
+        self.searches += rhs.searches;
+        self.expanded += rhs.expanded;
+    }
 }
 
 #[cfg(test)]

@@ -3,7 +3,6 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     ops::{Add, Sub},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -153,7 +152,7 @@ where
     C: Copy + Eq + Ord + Add<DC, Output = C>,
     DC: Copy,
 {
-    pub state: Rc<S>,
+    pub state: Arc<S>,
     pub cost: C,
     pub heuristic: DC,
 }

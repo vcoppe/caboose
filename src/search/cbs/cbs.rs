@@ -10,6 +10,7 @@ use std::{
 };
 
 use fxhash::FxHashMap;
+use parking_lot::{Condvar, Mutex};
 use tuple::{A2, T2};
 
 use crate::{
@@ -18,12 +19,43 @@ use crate::{
     SafeIntervalPathPlanningWithLandmarks, SippState, Solution, State, Task, TransitionSystem,
 };
 
-/// Implementation of the Conflict-Based Search algorithm.
-pub struct ConflictBasedSearch<TS, S, A, C, DC, H>
+struct Critical<S, A, C, DC>
+where
+    S: Debug + State + Eq + Hash + Clone,
+    C: Default + Copy + Ord + LimitValues,
+    DC: Default + Copy + Ord,
+{
+    queue: BinaryHeap<Reverse<Arc<CbsNode<S, A, C, DC>>>>,
+    ongoing: usize,
+    best: Option<Arc<CbsNode<S, A, C, DC>>>,
+    stats: CbsStats,
+}
+
+struct Shared<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: Debug + State + Eq + Hash + Clone,
-    A: Debug + Copy,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
+    DC: Default + Copy + Ord,
+{
+    transition_system: Arc<TS>,
+    critical: Mutex<Critical<S, A, C, DC>>,
+    monitor: Condvar,
+}
+
+/// Implementation of the Conflict-Based Search algorithm.
+pub struct ConflictBasedSearch<TS, S, A, C, DC, H>
+where
+    TS: TransitionSystem<S, A, C, DC> + Send + Sync,
+    S: Debug + State + Eq + Hash + Clone + Send + Sync,
+    A: Debug + Copy + Send + Sync,
     C: Debug
         + Hash
         + Eq
@@ -34,28 +66,21 @@ where
         + Sub<C, Output = DC>
         + Copy
         + Default
-        + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default,
-    H: Heuristic<TS, S, A, C, DC>,
+        + LimitValues
+        + Send
+        + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
-    transition_system: Arc<TS>,
-    queue: BinaryHeap<Reverse<Arc<CbsNode<S, A, C, DC>>>>,
-    lsipp: SafeIntervalPathPlanningWithLandmarks<
-        TS,
-        S,
-        A,
-        C,
-        DC,
-        ReverseResumableAStar<TS, S, A, C, DC, H>,
-    >,
-    stats: CbsStats,
+    shared: Shared<TS, S, A, C, DC>,
+    _phantom: PhantomData<H>,
 }
 
 impl<TS, S, A, C, DC, H> ConflictBasedSearch<TS, S, A, C, DC, H>
 where
-    TS: TransitionSystem<S, A, C, DC>,
-    S: Debug + State + Eq + Hash + Clone,
-    A: Debug + Copy,
+    TS: TransitionSystem<S, A, C, DC> + Send + Sync,
+    S: Debug + State + Eq + Hash + Clone + Send + Sync,
+    A: Debug + Copy + Send + Sync,
     C: Debug
         + Hash
         + Eq
@@ -66,36 +91,62 @@ where
         + Sub<C, Output = DC>
         + Copy
         + Default
-        + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default,
-    H: Heuristic<TS, S, A, C, DC>,
+        + LimitValues
+        + Send
+        + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
-        let lsipp = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
         Self {
-            transition_system,
-            queue: BinaryHeap::new(),
-            lsipp,
-            stats: CbsStats::default(),
+            shared: Shared {
+                transition_system,
+                critical: Mutex::new(Critical {
+                    queue: BinaryHeap::new(),
+                    ongoing: 0,
+                    best: None,
+                    stats: CbsStats::default(),
+                }),
+                monitor: Condvar::new(),
+            },
+            _phantom: PhantomData,
         }
     }
 
-    pub fn init(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) {
-        self.stats = CbsStats::default();
-        self.queue.clear();
+    fn init(
+        shared: &Shared<TS, S, A, C, DC>,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
+    ) {
+        {
+            let mut critical = shared.critical.lock();
+            critical.stats = CbsStats::default();
+            critical.queue.clear();
+        }
 
-        if let Some(root) = self.get_root(config) {
-            self.enqueue(config, root);
+        if let Some(root) = Self::get_root(config, lsipp) {
+            Self::enqueue(shared, config, root, lsipp);
         }
     }
 
-    fn enqueue(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>, mut node: CbsNode<S, A, C, DC>) {
-        if self.compute_conflicts(config, &mut node) {
-            self.queue.push(Reverse(Arc::new(node)));
-        }
-    }
-
-    fn get_root(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) -> Option<CbsNode<S, A, C, DC>> {
+    fn get_root(
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
+    ) -> Option<CbsNode<S, A, C, DC>> {
         let mut root = CbsNode::default();
 
         // Solve each task independently
@@ -115,7 +166,7 @@ where
                 config.heuristic_to_pivots.clone(),
             );
 
-            if let Some(solution) = self.lsipp.solve(&config) {
+            if let Some(solution) = lsipp.solve(&config) {
                 root.total_cost = solution.cost + root.total_cost - task.initial_cost;
                 root.solutions.push(solution);
             } else {
@@ -126,56 +177,126 @@ where
         Some(root)
     }
 
+    fn enqueue(
+        shared: &Shared<TS, S, A, C, DC>,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        mut node: CbsNode<S, A, C, DC>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
+    ) {
+        if Self::compute_conflicts(shared, config, &mut node, lsipp) {
+            let mut critical = shared.critical.lock();
+            critical.queue.push(Reverse(Arc::new(node)));
+        }
+    }
+
     pub fn solve(
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
     ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
-        self.init(config);
+        std::thread::scope(|s| {
+            for i in 0..8 {
+                let shared = &self.shared;
 
-        while let Some(Reverse(node)) = self.queue.pop() {
+                let mut lsipp =
+                    SafeIntervalPathPlanningWithLandmarks::new(shared.transition_system.clone());
+
+                if i == 0 {
+                    Self::init(shared, config, &mut lsipp);
+                }
+
+                s.spawn(move || {
+                    loop {
+                        match Self::get_workload(shared) {
+                            WorkLoad::Complete => break,
+                            WorkLoad::Aborted => break,
+                            WorkLoad::Starvation => continue,
+                            WorkLoad::WorkItem { node } => {
+                                Self::branch_on(shared, config, node, &mut lsipp);
+                                let mut critical = shared.critical.lock();
+                                critical.ongoing -= 1;
+                                shared.monitor.notify_all();
+                            }
+                        }
+                    }
+
+                    let mut critical = shared.critical.lock();
+                    critical.stats.lsipp_stats += lsipp.get_stats();
+                });
+            }
+        });
+
+        let mut critical = self.shared.critical.lock();
+
+        critical.stats.rra_stats = config
+            .heuristic_to_pivots
+            .iter()
+            .map(|h| h.get_stats())
+            .sum();
+        critical.best.as_ref().map(|n| {
+            n.get_solutions(config.n_agents)
+                .iter()
+                .map(|sol| (*sol).clone())
+                .collect()
+        })
+    }
+
+    fn get_workload(shared: &Shared<TS, S, A, C, DC>) -> WorkLoad<S, A, C, DC> {
+        let mut critical = shared.critical.lock();
+
+        while let Some(Reverse(node)) = critical.queue.pop() {
+            // Check if the node is still relevant
+            if let Some(best) = &critical.best {
+                if node.total_cost >= best.total_cost {
+                    critical.queue.clear();
+                    return WorkLoad::Starvation;
+                }
+            }
+
             if node.conflicts.is_empty() {
                 // No conflicts, we have a solution
-                return Some(
-                    node.get_solutions(config.n_agents)
-                        .iter()
-                        .map(|sol| (*sol).clone())
-                        .collect(),
-                );
+                critical.best = Some(node);
+            } else {
+                // Node must be further expanded
+                critical.ongoing += 1;
+                critical.stats.expanded += 1;
+                return WorkLoad::WorkItem { node };
             }
-
-            // Find the conflict with the highest priority
-            let conflict = node.conflicts.iter().min().unwrap();
-            // And branch on it
-            self.branch_on(config, &node, conflict);
         }
 
-        None
-    }
-
-    pub fn solve_iter(
-        &mut self,
-        config: &CbsConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Arc<CbsNode<S, A, C, DC>>> {
-        if let Some(Reverse(node)) = self.queue.pop() {
-            if !node.conflicts.is_empty() {
-                // Find the conflict with the highest priority
-                let conflict = node.conflicts.iter().min().unwrap();
-                self.branch_on(config, &node, conflict);
-            }
-
-            Some(node)
+        // Everything is processed
+        if critical.ongoing == 0 {
+            return WorkLoad::Complete;
         } else {
-            None
+            // Wait for other thread to push new nodes
+            shared.monitor.wait(&mut critical);
+            return WorkLoad::Starvation;
         }
     }
 
-    /// Branches on the given conflict, creating two successor nodes (if feasible).
+    /// Branches on the conflict with the highest priority, creating two successor nodes (if feasible).
     fn branch_on(
-        &mut self,
+        shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
-        node: &Arc<CbsNode<S, A, C, DC>>,
-        conflict: &Conflict<S, A, C, DC>,
+        node: Arc<CbsNode<S, A, C, DC>>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
     ) {
+        // Find the conflict with the highest priority
+        let conflict = node.conflicts.iter().min().unwrap();
+
         // Get the agents involved in the conflict
         let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
 
@@ -184,7 +305,7 @@ where
 
         // Create the successor nodes, the new constraints and compute the new solutions
         let (mut successors, mut solutions, constraints) =
-            self.get_successors(config, node, conflict);
+            Self::get_successors(shared, config, &node, conflict, lsipp);
 
         let mut landmark_added = false;
         for (i, (successor, solution)) in successors.drain(..).zip(solutions.drain(..)).enumerate()
@@ -233,19 +354,25 @@ where
                     continue;
                 }
 
-                self.enqueue(config, successor);
+                Self::enqueue(shared, config, successor, lsipp);
             }
         }
-
-        self.stats.expanded += 1;
     }
 
     /// Computes the successor nodes, the new constraints and the new solutions for the given conflict.
     fn get_successors(
-        &mut self,
+        shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &CbsNode<S, A, C, DC>,
         conflict: &Conflict<S, A, C, DC>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
     ) -> (
         Vec<Option<CbsNode<S, A, C, DC>>>,
         Vec<Option<Solution<Arc<SippState<S, C>>, A, C, DC>>>,
@@ -265,7 +392,8 @@ where
             if frozen[0] {
                 None
             } else {
-                Some(Arc::new(self.get_constraint(
+                Some(Arc::new(Self::get_constraint(
+                    shared,
                     config,
                     T2(&conflict.moves.0, &conflict.moves.1),
                 )))
@@ -273,7 +401,8 @@ where
             if frozen[1] {
                 None
             } else {
-                Some(Arc::new(self.get_constraint(
+                Some(Arc::new(Self::get_constraint(
+                    shared,
                     config,
                     T2(&conflict.moves.1, &conflict.moves.0),
                 )))
@@ -307,7 +436,7 @@ where
         // Compute a new path for each agent, taking into account the new constraint
         let solutions = vec![
             constraint_sets.0.and_then(|cs| {
-                self.lsipp.solve(&LSippConfig::new_with_pivots(
+                lsipp.solve(&LSippConfig::new_with_pivots(
                     config.tasks[agents[0]].clone(),
                     cs.0.clone(),
                     cs.1,
@@ -316,7 +445,7 @@ where
                 ))
             }),
             constraint_sets.1.and_then(|cs| {
-                self.lsipp.solve(&LSippConfig::new_with_pivots(
+                lsipp.solve(&LSippConfig::new_with_pivots(
                     config.tasks[agents[1]].clone(),
                     cs.0,
                     cs.1,
@@ -333,7 +462,7 @@ where
     /// If the first move is stationary, i.e. from == to, then the constraint is a state constraint.
     /// Otherwise, the constraint is an action constraint.
     fn get_constraint(
-        &self,
+        shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         moves: A2<&Move<S, A, C>>,
     ) -> Constraint<S, C> {
@@ -367,7 +496,10 @@ where
             delayed_move.interval.start = mid;
             delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
 
-            if self.transition_system.conflict(T2(&delayed_move, moves[1])) {
+            if shared
+                .transition_system
+                .conflict(T2(&delayed_move, moves[1]))
+            {
                 lo = mid;
             } else {
                 hi = mid;
@@ -391,9 +523,17 @@ where
     /// Computes the conflicts between the solutions of the given node, and returns true if
     /// all of them can be avoided.
     fn compute_conflicts(
-        &mut self,
+        shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &mut CbsNode<S, A, C, DC>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
     ) -> bool {
         let solutions = node.get_solutions(config.n_agents);
 
@@ -417,7 +557,7 @@ where
                 }
 
                 if let Some((conflict, avoidable)) =
-                    self.get_conflict(config, node, &solutions, T2(agent, other))
+                    Self::get_conflict(shared, config, node, &solutions, T2(agent, other), lsipp)
                 {
                     if !avoidable {
                         return false;
@@ -430,7 +570,7 @@ where
             for i in 0..config.n_agents {
                 for j in i + 1..config.n_agents {
                     if let Some((conflict, avoidable)) =
-                        self.get_conflict(config, node, &solutions, T2(i, j))
+                        Self::get_conflict(shared, config, node, &solutions, T2(i, j), lsipp)
                     {
                         if !avoidable {
                             return false;
@@ -448,11 +588,19 @@ where
 
     /// Returns the first conflict between the given solutions, if any, and whether it can be avoided.
     fn get_conflict(
-        &mut self,
+        shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &CbsNode<S, A, C, DC>,
         solutions: &[&Solution<Arc<SippState<S, C>>, A, C, DC>],
         agents: A2<usize>,
+        lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
+            TS,
+            S,
+            A,
+            C,
+            DC,
+            ReverseResumableAStar<TS, S, A, C, DC, H>,
+        >,
     ) -> Option<(Conflict<S, A, C, DC>, bool)> {
         let mut conflict = None;
 
@@ -520,7 +668,7 @@ where
                     ),
                 );
 
-                if self.transition_system.conflict(T2(&moves.0, &moves.1)) {
+                if shared.transition_system.conflict(T2(&moves.0, &moves.1)) {
                     conflict = Some(Conflict::new(moves));
                     break;
                 }
@@ -538,7 +686,8 @@ where
 
         if let Some(mut conflict) = conflict {
             // Determine conflict type by trying to avoid it
-            let (_, new_solutions, _) = self.get_successors(config, node, &conflict);
+            let (_, new_solutions, _) =
+                Self::get_successors(shared, config, node, &conflict, lsipp);
 
             if let (None, None) = (&new_solutions[0], &new_solutions[1]) {
                 return Some((conflict, false));
@@ -579,14 +728,8 @@ where
     }
 
     /// Returns the statistics of the search algorithm.
-    pub fn get_stats(&mut self, config: &CbsConfig<TS, S, A, C, DC, H>) -> CbsStats {
-        self.stats.lsipp_stats = self.lsipp.get_stats();
-        self.stats.rra_stats = config
-            .heuristic_to_pivots
-            .iter()
-            .map(|h| h.get_stats())
-            .sum();
-        self.stats
+    pub fn get_stats(&mut self) -> CbsStats {
+        self.shared.critical.lock().stats
     }
 }
 
@@ -913,6 +1056,18 @@ where
     fn cmp(&self, other: &Self) -> Ordering {
         self.total_cost.cmp(&other.total_cost)
     }
+}
+
+enum WorkLoad<S, A, C, DC>
+where
+    S: Debug + State + Eq + Hash + Clone,
+    C: Default + Copy + Ord + LimitValues,
+    DC: Default + Copy + Ord,
+{
+    Complete,
+    Aborted,
+    Starvation,
+    WorkItem { node: Arc<CbsNode<S, A, C, DC>> },
 }
 
 /// Statistics of the Conflict-Based Search algorithm.

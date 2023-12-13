@@ -2,8 +2,7 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
-    ops::{Add, Sub},
-    rc::Rc,
+    ops::{Add, AddAssign, Sub},
     sync::Arc,
 };
 
@@ -37,8 +36,8 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
-    solutions: Vec<Solution<Rc<SippState<S, C>>, A, C, DC>>,
-    parent: FxHashMap<(Rc<SippState<S, C>>, C), (Action<A, DC>, Rc<SippState<S, C>>, C)>,
+    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    parent: FxHashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
     stats: LSippStats,
 }
 
@@ -87,14 +86,12 @@ where
 
         if config.landmarks.is_empty() {
             // No landmarks, just solve the task with SIPP
-            self.sipp
-                .solve(&SippConfig::new(
-                    config.task.clone(),
-                    Default::default(),
-                    config.constraints.clone(),
-                    self.get_heuristic(config, config.task.clone()),
-                ))
-                .map(Self::map_to_arcs)
+            self.sipp.solve(&SippConfig::new(
+                config.task.clone(),
+                Default::default(),
+                config.constraints.clone(),
+                self.get_heuristic(config, config.task.clone()),
+            ))
         } else {
             // Solve the task with landmarks
             self.to_first_landmark(config);
@@ -236,21 +233,7 @@ where
         solution.actions.reverse();
         solution.cost = solution_to_goal.cost;
 
-        Some(Self::map_to_arcs(solution))
-    }
-
-    fn map_to_arcs(
-        solution: Solution<Rc<SippState<S, C>>, A, C, DC>,
-    ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
-        Solution {
-            cost: solution.cost,
-            steps: solution
-                .steps
-                .iter()
-                .map(|s| (Arc::new(s.0.as_ref().clone()), s.1))
-                .collect::<Vec<_>>(),
-            actions: solution.actions,
-        }
+        Some(solution)
     }
 
     fn get_heuristic(
@@ -354,6 +337,13 @@ where
 pub struct LSippStats {
     pub searches: usize,
     pub sipp_stats: SippStats,
+}
+
+impl AddAssign for LSippStats {
+    fn add_assign(&mut self, rhs: Self) {
+        self.searches += rhs.searches;
+        self.sipp_stats += rhs.sipp_stats;
+    }
 }
 
 #[cfg(test)]

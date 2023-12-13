@@ -1,47 +1,27 @@
 use std::{sync::Arc, time::Instant};
 
 use cbs::{
-    CbsConfig, CbsNode, ConflictBasedSearch, Graph, GraphEdgeId, GraphNodeId, MyTime,
-    ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, Task,
+    CbsConfig, ConflictBasedSearch, Graph, GraphEdgeId, GraphNodeId, MyTime, ReverseResumableAStar,
+    SimpleHeuristic, SimpleState, SimpleWorld, SippState, Solution, Task,
 };
 use nannou::prelude::*;
-use nannou_egui::{self, egui, Egui};
 use ordered_float::OrderedFloat;
 
 struct Model {
     graph_size: usize,
     scale: f32,
     graph: Arc<Graph>,
-    cbs:
-        ConflictBasedSearch<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
-    config: CbsConfig<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
-    nodes: Vec<Arc<CbsNode<SimpleState, GraphEdgeId, MyTime, MyTime>>>,
-    index: usize,
+    solution:
+        Option<Vec<Solution<Arc<SippState<SimpleState, MyTime>>, GraphEdgeId, MyTime, MyTime>>>,
     start_time: f32,
     colors: Vec<rgb::Rgb<nannou::color::encoding::Srgb, u8>>,
-    egui: Option<Egui>,
 }
 
 fn main() {
-    if false {
+    if true {
         nannou::app(model).update(update).run();
     } else {
-        let mut model = get_model();
-
-        let start = Instant::now();
-        let solution = model.cbs.solve(&model.config);
-        let duration = start.elapsed();
-
-        if let Some(solution) = solution {
-            println!(
-                "Solution cost: {}",
-                solution.iter().map(|sol| sol.cost).sum::<MyTime>().0
-            );
-        } else {
-            println!("No solution found");
-        }
-        println!("{:?}", model.cbs.get_stats(&model.config));
-        println!("Time elapsed: {:?}", duration);
+        get_model();
     }
 }
 
@@ -110,105 +90,51 @@ fn get_model() -> Model {
     let config = CbsConfig::new(tasks, pivots, heuristic_to_pivots, OrderedFloat(1e-6));
 
     let mut cbs = ConflictBasedSearch::new(transition_system);
-    cbs.init(&config);
-    let nodes = vec![cbs.solve_iter(&config).unwrap()];
+
+    let start = Instant::now();
+    let solution = cbs.solve(&config);
+    let duration = start.elapsed();
+
+    if let Some(solution) = &solution {
+        println!(
+            "Solution cost: {}",
+            solution.iter().map(|sol| sol.cost).sum::<MyTime>().0
+        );
+    } else {
+        println!("No solution found");
+    }
+
+    println!("{:?}", cbs.get_stats());
+    println!("Time elapsed: {:?}", duration);
 
     Model {
         graph_size,
         scale,
         graph,
-        cbs,
-        config,
-        nodes,
-        index: 0,
+        solution,
         start_time: 0.0,
         colors,
-        egui: None,
     }
 }
 
 fn model(app: &App) -> Model {
     let mut model = get_model();
 
-    let window_id = app
-        .new_window()
+    app.new_window()
         .size(
-            ((model.graph_size + 10) * model.scale.round() as usize) as u32,
+            (model.graph_size * model.scale.round() as usize) as u32,
             (model.graph_size * model.scale.round() as usize) as u32,
         )
         .view(view)
-        .raw_event(raw_window_event)
         .build()
         .unwrap();
-    let window = app.window(window_id).unwrap();
 
-    model.egui = Some(Egui::from_window(&window));
     model.start_time = app.time;
 
     model
 }
 
-fn get_node_at(
-    model: &mut Model,
-    index: usize,
-) -> Option<Arc<CbsNode<SimpleState, GraphEdgeId, MyTime, MyTime>>> {
-    while index >= model.nodes.len() {
-        if let Some(node) = model.cbs.solve_iter(&model.config) {
-            model.nodes.push(node);
-        } else {
-            return None;
-        }
-    }
-    Some(model.nodes[index].clone())
-}
-
-fn update(app: &App, model: &mut Model, update: Update) {
-    model
-        .egui
-        .as_mut()
-        .unwrap()
-        .set_elapsed_time(update.since_start);
-
-    let ctx = model.egui.as_mut().unwrap().begin_frame().clone();
-    egui::Window::new("Settings").show(&ctx, |ui| {
-        let prev = ui.button("Previous CBS node").clicked();
-        if prev {
-            model.index = model.index.saturating_sub(1);
-        }
-
-        let next = ui.button("Next CBS node").clicked();
-        if next {
-            model.index = model.index.saturating_add(1);
-        }
-
-        let next_sol = ui.button("Next solution").clicked();
-        if next_sol {
-            let start = model.index;
-            let mut found = false;
-            while let Some(node) = get_node_at(model, model.index + 1) {
-                model.index += 1;
-                if node.conflicts.is_empty() {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                model.index = start;
-            }
-        }
-
-        if prev || next || next_sol {
-            if get_node_at(model, model.index).is_none() {
-                model.index = model.nodes.len() - 1;
-            }
-            model.start_time = app.time;
-        }
-    });
-}
-
-fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
-    model.egui.as_mut().unwrap().handle_raw_event(event);
-}
+fn update(_app: &App, _model: &mut Model, _update: Update) {}
 
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
@@ -246,28 +172,18 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     // Draw agents
     let elapsed = app.time - model.start_time;
-    let initial_time = model
-        .config
-        .tasks
-        .iter()
-        .map(|t| t.initial_cost)
-        .min()
-        .unwrap();
-    let mut elapsed_time = OrderedFloat(elapsed);
-    let mut current_time = initial_time + elapsed;
+    let mut current_time = OrderedFloat(elapsed);
 
-    let solutions = model.nodes[model.index].get_solutions(model.config.n_agents);
+    let solutions = model.solution.as_ref().unwrap();
 
-    let max_elapsed_time = solutions
+    let max_time = solutions
         .iter()
         .map(|solution| solution.cost)
         .max()
-        .unwrap()
-        - initial_time;
+        .unwrap();
 
-    while elapsed_time > max_elapsed_time {
-        elapsed_time = elapsed_time - max_elapsed_time;
-        current_time = current_time - max_elapsed_time;
+    while current_time > max_time {
+        current_time = current_time - max_time;
     }
 
     for (agent, solution) in solutions.iter().enumerate() {
@@ -309,133 +225,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
         }
     }
 
-    let mut text = String::new();
-    let mut constraint_texts = vec![];
-
-    text += &format!("Current cost: {}\n", model.nodes[model.index].total_cost.0);
-
-    // Draw constraints
-    for agent in 0..model.config.n_agents {
-        text += &format!("Constraints for agent {}:\n", agent);
-
-        let (constraints, landmarks) = model.nodes[model.index].get_constraints(agent);
-        for ((from, to), constraint_set) in constraints.action_constraints.iter() {
-            for constraint in constraint_set {
-                if current_time >= constraint.interval.start
-                    && current_time <= constraint.interval.end
-                {
-                    let from = to_coordinate(from.0);
-                    let to = to_coordinate(to.0);
-
-                    let delta = to - from;
-                    let delta = delta.rotate(0.5 * PI).clamp_length_max(model.scale / 10.0);
-
-                    let from = from + delta;
-                    let to = to + delta;
-
-                    draw.line()
-                        .color(rgba8(
-                            model.colors[agent].red,
-                            model.colors[agent].green,
-                            model.colors[agent].blue,
-                            120,
-                        ))
-                        .start(from)
-                        .end(to)
-                        .weight(model.scale / 5.0);
-                }
-
-                constraint_texts.push(format!(
-                    "- Action constraint between nodes {} and {}, between {} and {}\n",
-                    from.0 .0, to.0 .0, constraint.interval.start.0, constraint.interval.end.0
-                ));
-            }
-        }
-
-        constraint_texts.sort_unstable();
-        text += &constraint_texts.join("");
-        constraint_texts.clear();
-
-        for (state, constraint_set) in constraints.state_constraints.iter() {
-            for constraint in constraint_set {
-                if current_time >= constraint.interval.start
-                    && current_time <= constraint.interval.end
-                {
-                    draw.rect()
-                        .w_h(model.scale, model.scale)
-                        .color(rgba8(
-                            model.colors[agent].red,
-                            model.colors[agent].green,
-                            model.colors[agent].blue,
-                            120,
-                        ))
-                        .xy(to_coordinate(state.0));
-                }
-
-                constraint_texts.push(format!(
-                    "- State constraint at node {}, between {} and {}\n",
-                    state.0 .0, constraint.interval.start.0, constraint.interval.end.0
-                ));
-            }
-        }
-
-        constraint_texts.sort_unstable();
-        text += &constraint_texts.join("");
-        constraint_texts.clear();
-
-        for constraint in landmarks.iter() {
-            if current_time >= constraint.interval.start && current_time <= constraint.interval.end
-            {
-                draw.ellipse()
-                    .radius(model.scale / 2.0)
-                    .no_fill()
-                    .stroke(rgba8(
-                        model.colors[agent].red,
-                        model.colors[agent].green,
-                        model.colors[agent].blue,
-                        120,
-                    ))
-                    .stroke_weight(model.scale / 10.0)
-                    .xy(to_coordinate(constraint.state.0));
-            }
-
-            constraint_texts.push(format!(
-                "- Landmark at node {}, between {} and {}\n",
-                constraint.state.0 .0, constraint.interval.start.0, constraint.interval.end.0
-            ));
-        }
-    }
-
-    constraint_texts.sort_unstable();
-    text += &constraint_texts.join("");
-    constraint_texts.clear();
-
-    text += &format!("Remaining conflicts\n");
-    for conflict in model.nodes[model.index].conflicts.iter() {
-        text += &format!(
-            "- Agent {} moving between nodes {} and {}, between {} and {}, and agent {} moving between {} and {}, between {} and {}\n",
-            conflict.moves.0.agent,
-            conflict.moves.0.from.0 .0,
-            conflict.moves.0.to.0 .0,
-            conflict.moves.0.interval.start.0,
-            conflict.moves.0.interval.end.0,
-            conflict.moves.1.agent,
-            conflict.moves.1.from.0 .0,
-            conflict.moves.1.to.0 .0,
-            conflict.moves.1.interval.start.0,
-            conflict.moves.1.interval.end.0,
-        );
-    }
-
-    draw.text(text.as_str())
-        .left_justify()
-        .color(BLACK)
-        .font_size(12)
-        .xy(vec2(model.graph_size as f32 * model.scale * 0.75, 0.0))
-        .width(model.scale * 5.0);
-
     draw.to_frame(app, &frame).unwrap();
-    model.egui.as_ref().unwrap().draw_to_frame(&frame).unwrap();
 }
 
 fn simple_graph(size: usize) -> Arc<Graph> {

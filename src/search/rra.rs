@@ -10,7 +10,6 @@ use std::{
     marker::PhantomData,
     ops::Add,
     ops::Sub,
-    rc::Rc,
     sync::Arc,
 };
 
@@ -101,7 +100,7 @@ where
     /// Initializes the reverse search algorithm by enqueueing the goal state.
     fn init(&mut self) {
         let goal_node = SearchNode {
-            state: Rc::new(self.task.goal_state.clone()),
+            state: Arc::new(self.task.goal_state.clone()),
             cost: self.task.initial_cost,
             heuristic: C::default() - C::default(),
         };
@@ -143,7 +142,7 @@ where
 
             // Expand the current state and enqueue its successors if a better path has been found
             for action in self.transition_system.reverse_actions_from(&current.state) {
-                let successor_state = Rc::new(
+                let successor_state = Arc::new(
                     self.transition_system
                         .reverse_transition(&current.state, action),
                 );
@@ -198,8 +197,8 @@ where
     DC: Copy,
 {
     queue: BinaryHeap<Reverse<SearchNode<S, C, DC>>>,
-    distance: FxHashMap<Rc<S>, C>,
-    closed: FxHashSet<Rc<S>>,
+    distance: FxHashMap<Arc<S>, C>,
+    closed: FxHashSet<Arc<S>>,
     stats: RraStats,
 }
 
