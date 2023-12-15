@@ -72,6 +72,7 @@ where
     DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
+    n_threads: usize,
     shared: Shared<TS, S, A, C, DC>,
     _phantom: PhantomData<H>,
 }
@@ -99,6 +100,7 @@ where
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
+            n_threads: num_cpus::get(),
             shared: Shared {
                 transition_system,
                 critical: Mutex::new(Critical {
@@ -127,8 +129,9 @@ where
     ) {
         {
             let mut critical = shared.critical.lock();
-            critical.stats = CbsStats::default();
             critical.queue.clear();
+            critical.best = None;
+            critical.stats = CbsStats::default();
         }
 
         if let Some(root) = Self::get_root(config, lsipp) {
@@ -201,7 +204,7 @@ where
         config: &CbsConfig<TS, S, A, C, DC, H>,
     ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
         std::thread::scope(|s| {
-            for i in 0..8 {
+            for i in 0..self.n_threads {
                 let shared = &self.shared;
 
                 let mut lsipp =
@@ -272,11 +275,11 @@ where
 
         // Everything is processed
         if critical.ongoing == 0 {
-            return WorkLoad::Complete;
+            WorkLoad::Complete
         } else {
             // Wait for other thread to push new nodes
             shared.monitor.wait(&mut critical);
-            return WorkLoad::Starvation;
+            WorkLoad::Starvation
         }
     }
 

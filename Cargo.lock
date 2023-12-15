@@ -192,6 +192,7 @@ dependencies = [
  "nannou",
  "nannou_egui",
  "ncollide2d",
+ "num_cpus",
  "ordered-float 4.1.1",
  "parking_lot 0.12.1",
  "tuple",
