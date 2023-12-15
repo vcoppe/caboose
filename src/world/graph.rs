@@ -1,13 +1,19 @@
+/// A directed graph node id.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GraphNodeId(pub usize);
 
+/// A directed graph edge id.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GraphEdgeId(pub usize);
 
+/// Definition of a directed graph node.
+#[derive(Debug)]
 pub struct GraphNode<NodeData> {
     pub data: NodeData,
 }
 
+/// Definition of a directed graph edge.
+#[derive(Debug)]
 pub struct GraphEdge<EdgeData> {
     pub from: GraphNodeId,
     pub to: GraphNodeId,
@@ -15,6 +21,7 @@ pub struct GraphEdge<EdgeData> {
 }
 
 /// Definition a weighted directed graph.
+#[derive(Debug)]
 pub struct Graph<NodeData, EdgeData> {
     edges: Vec<GraphEdge<EdgeData>>,
     nodes: Vec<GraphNode<NodeData>>,
@@ -32,6 +39,7 @@ impl<NodeData, EdgeData> Graph<NodeData, EdgeData> {
         }
     }
 
+    /// Adds a node to the graph and returns its id.
     pub fn add_node(&mut self, data: NodeData) -> GraphNodeId {
         let id = GraphNodeId(self.nodes.len());
         self.nodes.push(GraphNode { data });
@@ -40,6 +48,7 @@ impl<NodeData, EdgeData> Graph<NodeData, EdgeData> {
         id
     }
 
+    /// Adds an edge to the graph and returns its id.
     pub fn add_edge(&mut self, from: GraphNodeId, to: GraphNodeId, data: EdgeData) -> GraphEdgeId {
         let id = GraphEdgeId(self.edges.len());
         self.edges.push(GraphEdge { from, to, data });
@@ -48,10 +57,12 @@ impl<NodeData, EdgeData> Graph<NodeData, EdgeData> {
         id
     }
 
+    /// Returns the node with the given id.
     pub fn get_node(&self, id: GraphNodeId) -> &GraphNode<NodeData> {
         &self.nodes[id.0]
     }
 
+    /// Returns the edge with the given id.
     pub fn get_edge(&self, id: GraphEdgeId) -> &GraphEdge<EdgeData> {
         &self.edges[id.0]
     }
