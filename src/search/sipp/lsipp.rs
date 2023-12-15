@@ -354,10 +354,11 @@ mod tests {
 
     use crate::{
         Constraint, Graph, GraphNodeId, Interval, LSippConfig, ReverseResumableAStar,
-        SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState, SimpleWorld, Task,
+        SafeIntervalPathPlanningWithLandmarks, SimpleEdgeData, SimpleHeuristic, SimpleNodeData,
+        SimpleState, SimpleWorld, Task,
     };
 
-    fn simple_graph(size: usize) -> Arc<Graph> {
+    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {

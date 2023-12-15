@@ -2,7 +2,8 @@ use std::{sync::Arc, time::Instant};
 
 use cbs::{
     CbsConfig, ConflictBasedSearch, Graph, GraphEdgeId, GraphNodeId, MyTime, ReverseResumableAStar,
-    SimpleHeuristic, SimpleState, SimpleWorld, SippState, Solution, Task,
+    SimpleEdgeData, SimpleHeuristic, SimpleNodeData, SimpleState, SimpleWorld, SippState, Solution,
+    Task,
 };
 use nannou::prelude::*;
 use ordered_float::OrderedFloat;
@@ -10,7 +11,7 @@ use ordered_float::OrderedFloat;
 struct Model {
     graph_size: usize,
     scale: f32,
-    graph: Arc<Graph>,
+    graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     solution:
         Option<Vec<Solution<Arc<SippState<SimpleState, MyTime>>, GraphEdgeId, MyTime, MyTime>>>,
     start_time: f32,
@@ -142,7 +143,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     let to_coordinate = |node: GraphNodeId| {
         let node = model.graph.get_node(node);
-        (vec2(node.position.0 as f32, node.position.1 as f32)
+        (vec2(node.data.0 as f32, node.data.1 as f32)
             - vec2(
                 (model.graph_size - 1) as f32 / 2.0,
                 (model.graph_size - 1) as f32 / 2.0,
@@ -228,7 +229,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw.to_frame(app, &frame).unwrap();
 }
 
-fn simple_graph(size: usize) -> Arc<Graph> {
+fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
     let mut graph = Graph::new();
     for x in 0..size {
         for y in 0..size {

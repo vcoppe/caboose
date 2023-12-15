@@ -1088,12 +1088,13 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, Task,
+        Graph, GraphNodeId, ReverseResumableAStar, SimpleEdgeData, SimpleHeuristic, SimpleNodeData,
+        SimpleState, SimpleWorld, Task,
     };
 
     use super::{CbsConfig, ConflictBasedSearch};
 
-    fn simple_graph(size: usize) -> Arc<Graph> {
+    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {

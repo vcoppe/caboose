@@ -14,24 +14,26 @@ use crate::{
 };
 
 pub type MyTime = OrderedFloat<f32>;
+pub type SimpleNodeData = (f32, f32);
+pub type SimpleEdgeData = f32;
 
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
-    graph: Arc<Graph>,
+    graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
 }
 
 impl SimpleWorld {
     const BALL: Ball<f32> = Ball { radius: 0.4 };
 
-    pub fn new(graph: Arc<Graph>) -> Self {
+    pub fn new(graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>) -> Self {
         SimpleWorld { graph }
     }
 
     pub fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> MyTime {
         let from = self.graph.get_node(from);
         let to = self.graph.get_node(to);
-        let dx = to.position.0 - from.position.0;
-        let dy = to.position.1 - from.position.1;
+        let dx = to.data.0 - from.data.0;
+        let dy = to.data.1 - from.data.1;
         (dx * dx + dy * dy).sqrt().into()
     }
 
@@ -46,8 +48,8 @@ impl SimpleWorld {
         initial_time: &MyTime,
     ) -> (Point2<f32>, Vector2<f32>) {
         let interval = &m.interval;
-        let from = self.graph.get_node(m.from.0).position;
-        let to = self.graph.get_node(m.to.0).position;
+        let from = self.graph.get_node(m.from.0).data;
+        let to = self.graph.get_node(m.to.0).data;
 
         let d_x = to.0 - from.0;
         let d_y = to.1 - from.1;
@@ -171,10 +173,11 @@ mod tests {
     use tuple::T2;
 
     use crate::{
-        Graph, GraphEdgeId, GraphNodeId, Interval, Move, SimpleState, SimpleWorld, TransitionSystem,
+        Graph, GraphEdgeId, GraphNodeId, Interval, Move, SimpleEdgeData, SimpleNodeData,
+        SimpleState, SimpleWorld, TransitionSystem,
     };
 
-    fn simple_graph(size: usize) -> Arc<Graph> {
+    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {

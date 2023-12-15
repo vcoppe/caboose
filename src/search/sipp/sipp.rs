@@ -649,12 +649,13 @@ mod tests {
 
     use crate::{
         search::sipp::sipp::SippConfig, Constraint, ConstraintSet, Graph, GraphEdgeId, GraphNodeId,
-        Interval, MyTime, ReverseResumableAStar, SimpleHeuristic, SimpleState, SimpleWorld, Task,
+        Interval, MyTime, ReverseResumableAStar, SimpleEdgeData, SimpleHeuristic, SimpleNodeData,
+        SimpleState, SimpleWorld, Task,
     };
 
     use super::SafeIntervalPathPlanning;
 
-    fn simple_graph(size: usize) -> Arc<Graph> {
+    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {

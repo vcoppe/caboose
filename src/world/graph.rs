@@ -4,25 +4,25 @@ pub struct GraphNodeId(pub usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GraphEdgeId(pub usize);
 
-pub struct GraphNode {
-    pub position: (f32, f32),
+pub struct GraphNode<NodeData> {
+    pub data: NodeData,
 }
 
-pub struct GraphEdge {
+pub struct GraphEdge<EdgeData> {
     pub from: GraphNodeId,
     pub to: GraphNodeId,
-    pub distance: f32,
+    pub data: EdgeData,
 }
 
 /// Definition a weighted directed graph.
-pub struct Graph {
-    edges: Vec<GraphEdge>,
-    nodes: Vec<GraphNode>,
+pub struct Graph<NodeData, EdgeData> {
+    edges: Vec<GraphEdge<EdgeData>>,
+    nodes: Vec<GraphNode<NodeData>>,
     edges_in: Vec<Vec<GraphEdgeId>>,
     edges_out: Vec<Vec<GraphEdgeId>>,
 }
 
-impl Graph {
+impl<NodeData, EdgeData> Graph<NodeData, EdgeData> {
     pub fn new() -> Self {
         Graph {
             edges: Vec::new(),
@@ -32,27 +32,27 @@ impl Graph {
         }
     }
 
-    pub fn add_node(&mut self, position: (f32, f32)) -> GraphNodeId {
+    pub fn add_node(&mut self, data: NodeData) -> GraphNodeId {
         let id = GraphNodeId(self.nodes.len());
-        self.nodes.push(GraphNode { position });
+        self.nodes.push(GraphNode { data });
         self.edges_in.push(Vec::new());
         self.edges_out.push(Vec::new());
         id
     }
 
-    pub fn add_edge(&mut self, from: GraphNodeId, to: GraphNodeId, distance: f32) -> GraphEdgeId {
+    pub fn add_edge(&mut self, from: GraphNodeId, to: GraphNodeId, data: EdgeData) -> GraphEdgeId {
         let id = GraphEdgeId(self.edges.len());
-        self.edges.push(GraphEdge { from, to, distance });
+        self.edges.push(GraphEdge { from, to, data });
         self.edges_in[to.0].push(id);
         self.edges_out[from.0].push(id);
         id
     }
 
-    pub fn get_node(&self, id: GraphNodeId) -> &GraphNode {
+    pub fn get_node(&self, id: GraphNodeId) -> &GraphNode<NodeData> {
         &self.nodes[id.0]
     }
 
-    pub fn get_edge(&self, id: GraphEdgeId) -> &GraphEdge {
+    pub fn get_edge(&self, id: GraphEdgeId) -> &GraphEdge<EdgeData> {
         &self.edges[id.0]
     }
 
