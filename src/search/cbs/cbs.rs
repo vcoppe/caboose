@@ -475,7 +475,8 @@ where
         if moves[1].interval.end == C::max_value() {
             // The second agent stays at the conflicting position forever,
             // so the first agent will never be able to move or stay in that position
-            let interval = Interval::new(moves[0].interval.start, C::max_value());
+            let interval =
+                Interval::new(moves[0].interval.start - config.precision, C::max_value());
             if moves[0].action.is_some() {
                 return Constraint::new_action_constraint(
                     moves[0].agent,
@@ -512,7 +513,10 @@ where
             }
         }
 
-        let interval = Interval::new(moves[0].interval.start, hi);
+        let interval = Interval::new(
+            moves[0].interval.start - config.precision,
+            hi + config.precision,
+        );
 
         if moves[0].action.is_some() {
             Constraint::new_action_constraint(
