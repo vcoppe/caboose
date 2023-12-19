@@ -103,7 +103,7 @@ where
             &mut self.safe_intervals,
         );
 
-        if self.safe_intervals.is_empty() || self.safe_intervals[0].start > initial_time {
+        if self.safe_intervals.is_empty() {
             return None;
         }
 
@@ -125,6 +125,7 @@ where
             config.constraints.clone(),
             config.heuristic.clone(),
             single_path,
+            config.precision,
         ))
     }
 
@@ -299,12 +300,14 @@ where
 
                 // Check collision along the action
                 if let Some(collision_interval) = action_constraints.and_then(|col| {
-                    col.get(
-                        col.partition_point(|c| c.interval.end <= successor_cost - transition_cost),
-                    )
+                    col.get(col.partition_point(|c| {
+                        c.interval.end + config.precision < successor_cost - transition_cost
+                    }))
                     .map(|c| c.interval)
                 }) {
-                    if successor_cost - transition_cost >= collision_interval.start {
+                    if successor_cost - transition_cost + config.precision
+                        > collision_interval.start
+                    {
                         // Collision detected
                         if !self
                             .transition_system
@@ -315,8 +318,9 @@ where
                         }
                         successor_cost = collision_interval.end + transition_cost; // Try to depart later
 
-                        if successor_cost - transition_cost >= current.state.safe_interval.end
-                            || successor_cost >= safe_interval.end
+                        if successor_cost - transition_cost + config.precision
+                            > current.state.safe_interval.end
+                            || successor_cost + config.precision > safe_interval.end
                         {
                             continue;
                         }
@@ -415,7 +419,7 @@ where
             .push((current.clone(), self.distance[&current]));
 
         while let Some((action, parent)) = self.parent.get(&current) {
-            if self.distance[&current] - self.distance[parent] > action.cost {
+            if self.distance[parent] + action.cost + config.precision < self.distance[&current] {
                 solution
                     .steps
                     .push((parent.clone(), self.distance[&current] - action.cost));
@@ -466,6 +470,7 @@ where
     interval: Interval<C>,
     constraints: Arc<ConstraintSet<S, C>>,
     heuristic: Arc<H>,
+    precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
 }
 
@@ -489,12 +494,14 @@ where
         interval: Interval<C>,
         constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
+        precision: DC,
     ) -> Self {
         SippConfig {
             task,
             interval,
             constraints,
             heuristic,
+            precision,
             _phantom: PhantomData,
         }
     }
@@ -521,6 +528,7 @@ where
     constraints: Arc<ConstraintSet<S, C>>,
     heuristic: Arc<H>,
     single_path: bool,
+    precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
 }
 
@@ -545,12 +553,14 @@ where
         constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
         single_path: bool,
+        precision: DC,
     ) -> Self {
         GeneralizedSippConfig {
             task,
             constraints,
             heuristic,
             single_path,
+            precision,
             _phantom: PhantomData,
         }
     }
@@ -705,6 +715,7 @@ mod tests {
                         task.clone(),
                         SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
                     )),
+                    1e-6.into(),
                 );
                 let before = solver.get_stats();
                 let solution = solver.solve(&config).unwrap();
@@ -816,6 +827,7 @@ mod tests {
                 task.clone(),
                 SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
             )),
+            1e-6.into(),
         );
 
         let solution = solver.solve(&config).unwrap();

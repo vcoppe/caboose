@@ -167,6 +167,7 @@ where
                 Default::default(),
                 config.pivots.clone(),
                 config.heuristic_to_pivots.clone(),
+                config.precision,
             );
 
             if let Some(solution) = lsipp.solve(&config) {
@@ -445,6 +446,7 @@ where
                     cs.1,
                     config.pivots.clone(),
                     config.heuristic_to_pivots.clone(),
+                    config.precision,
                 ))
             }),
             constraint_sets.1.and_then(|cs| {
@@ -454,6 +456,7 @@ where
                     cs.1,
                     config.pivots.clone(),
                     config.heuristic_to_pivots.clone(),
+                    config.precision,
                 ))
             }),
         ];
@@ -493,7 +496,7 @@ where
         let mut hi = moves[1].interval.end; // Starting the move after the second agent has finished its move is always okay
 
         let mut delayed_move = moves[0].clone();
-        while hi - lo > config.collision_precision {
+        while hi - lo > config.precision {
             let mid = lo + (hi - lo) / 2.0;
 
             delayed_move.interval.start = mid;
@@ -759,7 +762,7 @@ where
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
-    collision_precision: DC,
+    precision: DC,
     _phantom: PhantomData<(TS, A)>,
 }
 
@@ -782,7 +785,7 @@ where
         tasks: Vec<Arc<Task<S, C>>>,
         pivots: Arc<Vec<S>>,
         heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
-        collision_precision: DC,
+        precision: DC,
     ) -> Self {
         Self {
             n_agents: tasks.len(),
@@ -790,7 +793,7 @@ where
             frozen: FxHashMap::default(),
             pivots,
             heuristic_to_pivots,
-            collision_precision,
+            precision,
             _phantom: PhantomData,
         }
     }

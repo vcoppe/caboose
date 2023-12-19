@@ -91,6 +91,7 @@ where
                 Default::default(),
                 config.constraints.clone(),
                 self.get_heuristic(config, config.task.clone()),
+                config.precision,
             ))
         } else {
             // Solve the task with landmarks
@@ -114,6 +115,7 @@ where
                 config.landmarks[0].interval,
                 config.constraints.clone(),
                 self.get_heuristic(config, task),
+                config.precision,
             ),
             false,
         );
@@ -151,6 +153,7 @@ where
                 config.constraints.clone(),
                 self.get_heuristic(config, task),
                 false,
+                config.precision,
             );
 
             self.solutions = self.sipp.solve_generalized(&config);
@@ -180,6 +183,7 @@ where
             config.constraints.clone(),
             self.get_heuristic(config, task),
             false, // we want a solution that reaches an [t,+inf) safe interval
+            config.precision,
         );
 
         self.solutions = self.sipp.solve_generalized(&config);
@@ -279,6 +283,7 @@ where
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    precision: DC,
     _phantom: PhantomData<(TS, A)>,
 }
 
@@ -303,6 +308,7 @@ where
         constraints: Arc<ConstraintSet<S, C>>,
         landmarks: LandmarkSet<S, C>,
         heuristic: Arc<H>,
+        precision: DC,
     ) -> Self {
         Self {
             task: task.clone(),
@@ -310,6 +316,7 @@ where
             landmarks,
             pivots: Arc::new(vec![task.goal_state.clone()]),
             heuristic_to_pivots: Arc::new(vec![heuristic]),
+            precision,
             _phantom: PhantomData,
         }
     }
@@ -320,6 +327,7 @@ where
         landmarks: LandmarkSet<S, C>,
         pivots: Arc<Vec<S>>,
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+        precision: DC,
     ) -> Self {
         Self {
             task,
@@ -327,6 +335,7 @@ where
             landmarks,
             pivots,
             heuristic_to_pivots,
+            precision,
             _phantom: PhantomData,
         }
     }
@@ -408,6 +417,7 @@ mod tests {
                         task.clone(),
                         SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
                     )),
+                    1e-6.into(),
                 );
                 let before = solver.get_stats();
                 let solution = solver.solve(&config).unwrap();
@@ -454,6 +464,7 @@ mod tests {
                 task.clone(),
                 SimpleHeuristic::new(transition_system.clone(), Arc::new(task.reverse())),
             )),
+            1e-6.into(),
         );
         let before = solver.get_stats();
         let solution = solver.solve(&config).unwrap();
