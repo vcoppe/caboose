@@ -47,6 +47,7 @@ where
     closed: FxHashSet<Arc<SippState<S, C>>>,
     parent: FxHashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
     goal_intervals: BTreeSet<Interval<C>>,
+    goal_horizon: C,
     safe_intervals: Vec<Interval<C>>,
     stats: SippStats,
     _phantom: PhantomData<(A, H)>,
@@ -80,6 +81,7 @@ where
             closed: FxHashSet::default(),
             parent: FxHashMap::default(),
             goal_intervals: BTreeSet::default(),
+            goal_horizon: C::max_value(),
             safe_intervals: vec![],
             stats: SippStats::default(),
             _phantom: PhantomData,
@@ -158,6 +160,7 @@ where
         self.closed.clear();
         self.parent.clear();
         self.goal_intervals.clear();
+        self.goal_horizon = C::min_value();
 
         // Enqueue the initial nodes
         for (initial_time, initial_state) in config
@@ -188,6 +191,7 @@ where
             return false;
         }
         self.safe_intervals.drain(..).for_each(|i| {
+            self.goal_horizon = self.goal_horizon.max(i.end);
             self.goal_intervals.insert(i);
         });
 
@@ -210,6 +214,11 @@ where
                 continue;
             }
 
+            if current.cost + current.heuristic >= self.goal_horizon {
+                // The remaining safe intervals at the goal state are not reachable in time
+                continue;
+            }
+
             if config.task.is_goal(&current) {
                 // A path to the goal has been found
                 goals.push(current.clone());
@@ -217,6 +226,7 @@ where
                 if self.goal_intervals.is_empty() {
                     break;
                 }
+                self.goal_horizon = self.goal_intervals.last().unwrap().end;
             }
 
             // Expand the current state and enqueue its successors
@@ -252,8 +262,8 @@ where
             }
             let heuristic = heuristic.unwrap();
 
-            if current.cost + transition_cost + heuristic >= config.task.goal_interval.end {
-                // The goal state is not reachable in time
+            if current.cost + transition_cost + heuristic >= self.goal_horizon {
+                // The remaining safe intervals at the goal state are not reachable in time
                 continue;
             }
 
@@ -322,8 +332,8 @@ where
                     }
                 }
 
-                if successor_cost + heuristic >= config.task.goal_interval.end {
-                    // The goal state is not reachable in time
+                if successor_cost + heuristic >= self.goal_horizon {
+                    // The remaining safe intervals at the goal state are not reachable in time
                     continue;
                 }
 
