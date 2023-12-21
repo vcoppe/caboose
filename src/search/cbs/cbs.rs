@@ -22,7 +22,7 @@ use crate::{
 struct Critical<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Default + Copy + Ord + LimitValues,
+    C: Debug + Default + Copy + Ord + LimitValues,
     DC: Default + Copy + Ord,
 {
     queue: BinaryHeap<Reverse<Arc<CbsNode<S, A, C, DC>>>>,
@@ -35,7 +35,8 @@ struct Shared<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: Debug + State + Eq + Hash + Clone,
-    C: Eq
+    C: Debug
+        + Eq
         + PartialOrd
         + Ord
         + Add<DC, Output = C>
@@ -251,6 +252,33 @@ where
         })
     }
 
+    pub fn solve_iter(
+        &mut self,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+    ) -> Option<Arc<CbsNode<S, A, C, DC>>> {
+        let mut lsipp =
+            SafeIntervalPathPlanningWithLandmarks::new(self.shared.transition_system.clone());
+
+        if self.shared.critical.lock().stats.expanded == 0 {
+            Self::init(&self.shared, config, &mut lsipp)
+        }
+
+        match Self::get_workload(&self.shared) {
+            WorkLoad::WorkItem { node } => {
+                Self::branch_on(&self.shared, config, node.clone(), &mut lsipp);
+                self.shared.critical.lock().ongoing -= 1;
+                Some(node)
+            }
+            _ => self
+                .shared
+                .critical
+                .lock()
+                .best
+                .as_ref()
+                .and_then(|b| Some(b.clone())),
+        }
+    }
+
     fn get_workload(shared: &Shared<TS, S, A, C, DC>) -> WorkLoad<S, A, C, DC> {
         let mut critical = shared.critical.lock();
 
@@ -392,26 +420,25 @@ where
         );
 
         // Get one constraint for each agent from the transition system to avoid the conflict
-        let constraints = T2(
-            if frozen[0] {
-                None
-            } else {
-                Some(Arc::new(Self::get_constraint(
-                    shared,
-                    config,
-                    T2(&conflict.moves.0, &conflict.moves.1),
-                )))
-            },
-            if frozen[1] {
-                None
-            } else {
-                Some(Arc::new(Self::get_constraint(
-                    shared,
-                    config,
-                    T2(&conflict.moves.1, &conflict.moves.0),
-                )))
-            },
-        );
+        let constraints = match (frozen[0], frozen[1]) {
+            (true, true) => T2(None, None),
+            (false, true) => T2(
+                Some(Arc::new(
+                    Self::get_constraints(shared, config, &conflict.moves).0,
+                )),
+                None,
+            ),
+            (true, false) => T2(
+                None,
+                Some(Arc::new(
+                    Self::get_constraints(shared, config, &conflict.moves).1,
+                )),
+            ),
+            (false, false) => {
+                let constraints = Self::get_constraints(shared, config, &conflict.moves);
+                T2(Some(Arc::new(constraints.0)), Some(Arc::new(constraints.1)))
+            }
+        };
 
         // Get a minimal clone of the current node to allow retrieving the constraints in the successor nodes
         // without needing to store the current node in an Arc
@@ -464,35 +491,121 @@ where
         (successors, solutions, constraints)
     }
 
-    /// Returns a constraint that ensures that the first move will not collide with the second move anymore.
-    /// If the first move is stationary, i.e. from == to, then the constraint is a state constraint.
+    /// Returns a constraint that ensures that the first move will not collide with the second move anymore, and vice-versa.
+    /// If the first move considered is stationary, i.e. from == to, then the constraint is a state constraint.
     /// Otherwise, the constraint is an action constraint.
-    fn get_constraint(
+    fn get_constraints(
         shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
-        moves: A2<&Move<S, A, C>>,
-    ) -> Constraint<S, C> {
-        if moves[1].interval.end == C::max_value() {
-            // The second agent stays at the conflicting position forever,
-            // so the first agent will never be able to move or stay in that position
-            let interval =
-                Interval::new(moves[0].interval.start - config.precision, C::max_value());
-            if moves[0].action.is_some() {
-                return Constraint::new_action_constraint(
+        moves: &A2<Move<S, A, C>>,
+    ) -> A2<Constraint<S, C>> {
+        if moves[0].action.is_none() && moves[1].action.is_none() {
+            let interval = Interval::new(
+                moves[0].interval.start.max(moves[1].interval.start) - config.precision,
+                moves[0].interval.end.min(moves[1].interval.end) + config.precision,
+            );
+            T2(
+                Constraint::new_state_constraint(moves[0].agent, moves[0].from.clone(), interval),
+                Constraint::new_state_constraint(moves[1].agent, moves[1].from.clone(), interval),
+            )
+        } else if moves[0].action.is_some() && moves[1].action.is_some() {
+            T2(
+                Constraint::new_action_constraint(
+                    moves[0].agent,
+                    moves[0].from.clone(),
+                    moves[0].to.clone(),
+                    Interval::new(
+                        moves[0].interval.start - config.precision,
+                        Self::earliest_non_colliding_time(shared, config, T2(&moves[0], &moves[1]))
+                            + config.precision,
+                    ),
+                ),
+                Constraint::new_action_constraint(
+                    moves[1].agent,
+                    moves[1].from.clone(),
+                    moves[1].to.clone(),
+                    Interval::new(
+                        moves[1].interval.start - config.precision,
+                        Self::earliest_non_colliding_time(shared, config, T2(&moves[1], &moves[0]))
+                            + config.precision,
+                    ),
+                ),
+            )
+        } else {
+            let swap = moves[0].action.is_none();
+            let moves = if swap {
+                T2(&moves[1], &moves[0])
+            } else {
+                T2(&moves[0], &moves[1])
+            };
+
+            let first_constraint = if moves[1].interval.end == C::max_value() {
+                // The second agent stays at the conflicting position forever,
+                // so the first agent will never be able to move to that position
+                let interval =
+                    Interval::new(moves[0].interval.start - config.precision, C::max_value());
+                Constraint::new_action_constraint(
                     moves[0].agent,
                     moves[0].from.clone(),
                     moves[0].to.clone(),
                     interval,
-                );
+                )
             } else {
-                return Constraint::new_state_constraint(
+                Constraint::new_action_constraint(
                     moves[0].agent,
                     moves[0].from.clone(),
-                    interval,
+                    moves[0].to.clone(),
+                    Interval::new(
+                        moves[0].interval.start - config.precision,
+                        Self::earliest_non_colliding_time(shared, config, T2(&moves[0], &moves[1]))
+                            + config.precision,
+                    ),
+                )
+            };
+
+            let collision_delta = if moves[1].interval.end == C::max_value() {
+                let shortened_move = Move::new(
+                    moves[1].agent,
+                    moves[1].from.clone(),
+                    moves[1].to.clone(),
+                    moves[1].action.clone(),
+                    Interval::new(
+                        moves[1].interval.start,
+                        moves[1].interval.start + (moves[0].interval.end - moves[0].interval.start),
+                    ),
                 );
+                shortened_move.interval.end
+                    - (Self::earliest_non_colliding_time(
+                        shared,
+                        config,
+                        T2(&moves[0], &shortened_move),
+                    ) + config.precision)
+            } else {
+                moves[1].interval.end - first_constraint.interval.end
+            };
+
+            let second_constraint = Constraint::new_state_constraint(
+                moves[1].agent,
+                moves[1].from.clone(),
+                Interval::new(
+                    moves[0].interval.start + collision_delta,
+                    moves[0].interval.end + collision_delta + config.precision + config.precision,
+                ),
+            );
+
+            if swap {
+                T2(second_constraint, first_constraint)
+            } else {
+                T2(first_constraint, second_constraint)
             }
         }
+    }
 
+    fn earliest_non_colliding_time(
+        shared: &Shared<TS, S, A, C, DC>,
+        config: &CbsConfig<TS, S, A, C, DC, H>,
+        moves: A2<&Move<S, A, C>>,
+    ) -> C {
         let mut lo = moves[0].interval.start;
         let mut hi = moves[1].interval.end; // Starting the move after the second agent has finished its move is always okay
 
@@ -513,21 +626,7 @@ where
             }
         }
 
-        let interval = Interval::new(
-            moves[0].interval.start - config.precision,
-            hi + config.precision,
-        );
-
-        if moves[0].action.is_some() {
-            Constraint::new_action_constraint(
-                moves[0].agent,
-                moves[0].from.clone(),
-                moves[0].to.clone(),
-                interval,
-            )
-        } else {
-            Constraint::new_state_constraint(moves[0].agent, moves[0].from.clone(), interval)
-        }
+        hi
     }
 
     /// Computes the conflicts between the solutions of the given node, and returns true if
@@ -812,7 +911,7 @@ where
 pub struct CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     pub total_cost: DC,
@@ -826,7 +925,7 @@ where
 impl<S, A, C, DC> Default for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn default() -> Self {
@@ -844,7 +943,7 @@ where
 impl<S, A, C, DC> CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     pub fn new(parent: Arc<Self>, constraint: Arc<Constraint<S, C>>) -> Self {
@@ -1030,7 +1129,7 @@ where
 impl<S, A, C, DC> PartialEq for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -1041,7 +1140,7 @@ where
 impl<S, A, C, DC> Eq for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
 }
@@ -1049,7 +1148,7 @@ where
 impl<S, A, C, DC> PartialOrd for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -1060,7 +1159,7 @@ where
 impl<S, A, C, DC> Ord for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -1071,7 +1170,7 @@ where
 enum WorkLoad<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Default + Copy + Ord + LimitValues,
+    C: Debug + Default + Copy + Ord + LimitValues,
     DC: Default + Copy + Ord,
 {
     Complete,

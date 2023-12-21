@@ -109,16 +109,13 @@ where
             config.landmarks[0].state.clone(),
             config.task.initial_cost,
         ));
-        let config = self.sipp.to_generalized(
-            &SippConfig::new(
-                task.clone(),
-                config.landmarks[0].interval,
-                config.constraints.clone(),
-                self.get_heuristic(config, task),
-                config.precision,
-            ),
-            false,
-        );
+        let config = self.sipp.to_generalized(&SippConfig::new(
+            task.clone(),
+            config.landmarks[0].interval,
+            config.constraints.clone(),
+            self.get_heuristic(config, task),
+            config.precision,
+        ));
 
         if config.is_none() {
             return;
@@ -152,7 +149,6 @@ where
                 ),
                 config.constraints.clone(),
                 self.get_heuristic(config, task),
-                false,
                 config.precision,
             );
 
@@ -182,13 +178,15 @@ where
             ),
             config.constraints.clone(),
             self.get_heuristic(config, task),
-            false, // we want a solution that reaches an [t,+inf) safe interval
             config.precision,
         );
 
         self.solutions = self.sipp.solve_generalized(&config);
         if !self.solutions.is_empty() {
             self.solutions = vec![self.solutions.pop().unwrap()];
+            if self.solutions[0].steps.last().unwrap().0.safe_interval.end != C::max_value() {
+                self.solutions.clear();
+            }
         }
 
         self.store_parents();

@@ -91,7 +91,6 @@ where
     pub fn to_generalized(
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
-        single_path: bool,
     ) -> Option<GeneralizedSippConfig<TS, S, A, C, DC, H>> {
         let initial_time = config.task.initial_cost;
 
@@ -124,7 +123,6 @@ where
             sipp_task,
             config.constraints.clone(),
             config.heuristic.clone(),
-            single_path,
             config.precision,
         ))
     }
@@ -134,7 +132,7 @@ where
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
     ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
-        self.to_generalized(config, true)
+        self.to_generalized(config)
             .and_then(|config| self.solve_generalized(&config).pop())
     }
     /// Attempts to solve the given generalized configuration, and returns the optimal solution if any.
@@ -215,9 +213,6 @@ where
             if config.task.is_goal(&current) {
                 // A path to the goal has been found
                 goals.push(current.clone());
-                if config.single_path {
-                    break;
-                }
                 self.goal_intervals.remove(&current.state.safe_interval);
                 if self.goal_intervals.is_empty() {
                     break;
@@ -527,7 +522,6 @@ where
     task: SippTask<S, C, DC>,
     constraints: Arc<ConstraintSet<S, C>>,
     heuristic: Arc<H>,
-    single_path: bool,
     precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
 }
@@ -552,14 +546,12 @@ where
         task: SippTask<S, C, DC>,
         constraints: Arc<ConstraintSet<S, C>>,
         heuristic: Arc<H>,
-        single_path: bool,
         precision: DC,
     ) -> Self {
         GeneralizedSippConfig {
             task,
             constraints,
             heuristic,
-            single_path,
             precision,
             _phantom: PhantomData,
         }
