@@ -84,7 +84,7 @@ where
     ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         self.init();
 
-        if config.landmarks.is_empty() {
+        let solution = if config.landmarks.is_empty() {
             // No landmarks, just solve the task with SIPP
             self.sipp.solve(&SippConfig::new(
                 config.task.clone(),
@@ -99,7 +99,16 @@ where
             self.between_landmarks(config);
             self.to_goal(config);
             self.get_solution()
-        }
+        };
+
+        solution.and_then(|sol| {
+            // Last move must be valid until the end of the horizon
+            if sol.steps.last().unwrap().0.safe_interval.end != C::max_value() {
+                None
+            } else {
+                Some(sol)
+            }
+        })
     }
 
     // Go from the initial state to the first landmark
@@ -182,12 +191,6 @@ where
         );
 
         self.solutions = self.sipp.solve_generalized(&config);
-        if !self.solutions.is_empty() {
-            self.solutions = vec![self.solutions.pop().unwrap()];
-            if self.solutions[0].steps.last().unwrap().0.safe_interval.end != C::max_value() {
-                self.solutions.clear();
-            }
-        }
     }
 
     /// Stores the last solutions as solution parts
