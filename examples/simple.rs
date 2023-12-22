@@ -9,7 +9,8 @@ use nannou::prelude::*;
 use ordered_float::OrderedFloat;
 
 struct Model {
-    graph_size: usize,
+    width: usize,
+    height: usize,
     scale: f32,
     graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     solution:
@@ -27,36 +28,24 @@ fn main() {
 }
 
 fn get_model() -> Model {
-    let graph_size = 10;
+    let width = 10;
+    let height = 2;
     let scale = 60.0;
 
-    let graph = simple_graph(graph_size);
+    let graph = simple_graph(width, height);
     let transition_system = Arc::new(SimpleWorld::new(graph.clone()));
 
-    let to_id = |x: usize, y: usize| GraphNodeId(x + y * graph_size);
+    let to_id = |x: usize, y: usize| GraphNodeId(x + y * width);
 
     let mut tasks = vec![];
     for (from, to) in vec![
-        /*((4, 8), (8, 1)),
-        ((5, 9), (3, 6)),
-        ((9, 5), (0, 7)),
-        ((2, 8), (7, 9)),
-        ((4, 3), (8, 8)),
-        ((2, 5), (0, 2)),
-        ((8, 2), (1, 4)),
-        ((8, 9), (1, 6)),
-        ((2, 7), (9, 4)),
-        ((1, 0), (7, 5)),
-        ((0, 9), (3, 8)),
-        ((9, 1), (7, 3)),
-        ((5, 1), (0, 5)),*/
-        ((0, 0), (0, 9)),
-        ((0, 9), (0, 0)),
-        ((0, 1), (0, 8)),
-        ((0, 8), (0, 1)),
-        ((0, 2), (0, 7)),
-        ((0, 7), (0, 2)),
-        ((0, 3), (0, 6)),
+        ((0, 0), (9, 0)),
+        ((9, 0), (0, 0)),
+        ((1, 0), (8, 0)),
+        ((8, 0), (1, 0)),
+        ((2, 0), (7, 0)),
+        ((7, 0), (2, 0)),
+        ((3, 0), (6, 0)),
     ]
     .iter()
     .map(|((x1, y1), (x2, y2))| (to_id(*x1, *y1), to_id(*x2, *y2)))
@@ -109,7 +98,8 @@ fn get_model() -> Model {
     println!("Time elapsed: {:?}", duration);
 
     Model {
-        graph_size,
+        width,
+        height,
         scale,
         graph,
         solution,
@@ -123,8 +113,8 @@ fn model(app: &App) -> Model {
 
     app.new_window()
         .size(
-            (model.graph_size * model.scale.round() as usize) as u32,
-            (model.graph_size * model.scale.round() as usize) as u32,
+            (model.width * model.scale.round() as usize) as u32,
+            (model.height * model.scale.round() as usize) as u32,
         )
         .view(view)
         .build()
@@ -145,8 +135,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
         let node = model.graph.get_node(node);
         (vec2(node.data.0 as f32, node.data.1 as f32)
             - vec2(
-                (model.graph_size - 1) as f32 / 2.0,
-                (model.graph_size - 1) as f32 / 2.0,
+                (model.width - 1) as f32 / 2.0,
+                (model.height - 1) as f32 / 2.0,
             ))
             * model.scale
     };
@@ -229,27 +219,27 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw.to_frame(app, &frame).unwrap();
 }
 
-fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
+fn simple_graph(width: usize, height: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
     let mut graph = Graph::new();
-    for x in 0..size {
-        for y in 0..size {
+    for y in 0..height {
+        for x in 0..width {
             graph.add_node((x as f32, y as f32));
         }
     }
-    for x in 0..size {
-        for y in 0..size {
-            let node_id = GraphNodeId(x + y * size);
+    for x in 0..width {
+        for y in 0..height {
+            let node_id = GraphNodeId(x + y * width);
             if x > 0 {
-                graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
+                graph.add_edge(node_id, GraphNodeId(x - 1 + y * width), 1.0);
             }
             if y > 0 {
-                graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
+                graph.add_edge(node_id, GraphNodeId(x + (y - 1) * width), 1.0);
             }
-            if x < size - 1 {
-                graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
+            if x < width - 1 {
+                graph.add_edge(node_id, GraphNodeId(x + 1 + y * width), 1.0);
             }
-            if y < size - 1 {
-                graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
+            if y < height - 1 {
+                graph.add_edge(node_id, GraphNodeId(x + (y + 1) * width), 1.0);
             }
         }
     }
