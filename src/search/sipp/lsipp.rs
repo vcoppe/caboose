@@ -9,9 +9,9 @@ use std::{
 use fxhash::FxHashMap;
 
 use crate::{
-    Action, ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval,
-    LandmarkSet, LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippStats, SippTask,
-    Solution, State, Task, TransitionSystem,
+    ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, LandmarkSet,
+    LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippStats, SippTask, Solution,
+    State, Task, TransitionSystem,
 };
 
 /// Implementation of Safe Interval Path Planning algorithm that supports landmarks
@@ -37,7 +37,7 @@ where
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    parent: FxHashMap<(Arc<SippState<S, C>>, C), (Action<A, DC>, Arc<SippState<S, C>>, C)>,
+    solution_parts: FxHashMap<(Arc<SippState<S, C>>, C), Solution<Arc<SippState<S, C>>, A, C, DC>>,
     stats: LSippStats,
 }
 
@@ -64,7 +64,7 @@ where
     pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
             sipp: SafeIntervalPathPlanning::new(transition_system),
-            parent: FxHashMap::default(),
+            solution_parts: FxHashMap::default(),
             solutions: vec![],
             stats: LSippStats::default(),
         }
@@ -72,7 +72,7 @@ where
 
     fn init(&mut self) {
         self.solutions.clear();
-        self.parent.clear();
+        self.solution_parts.clear();
 
         self.stats.searches += 1;
     }
@@ -125,7 +125,7 @@ where
 
         self.solutions = self.sipp.solve_generalized(&config);
 
-        self.store_parents();
+        self.store_solution_parts();
     }
 
     // Connect all landmarks sequentially
@@ -154,7 +154,7 @@ where
 
             self.solutions = self.sipp.solve_generalized(&config);
 
-            self.store_parents();
+            self.store_solution_parts();
         }
     }
 
@@ -188,52 +188,48 @@ where
                 self.solutions.clear();
             }
         }
-
-        self.store_parents();
     }
 
-    /// Stores the parent of each state in the solutions
-    fn store_parents(&mut self) {
-        for solution in self.solutions.iter() {
-            for (i, (state, cost)) in solution.steps.iter().enumerate().skip(1) {
-                self.parent.insert(
-                    (state.clone(), *cost),
-                    (
-                        solution.actions[i - 1],
-                        solution.steps[i - 1].0.clone(),
-                        solution.steps[i - 1].1,
-                    ),
-                );
-            }
+    /// Stores the last solutions as solution parts
+    fn store_solution_parts(&mut self) {
+        for solution in self.solutions.drain(..) {
+            self.solution_parts
+                .insert(solution.steps.last().unwrap().clone(), solution);
         }
     }
 
     /// Returns the solution to the given task, if any.
-    fn get_solution(&self) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    fn get_solution(&mut self) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         if self.solutions.is_empty() {
             return None;
         }
 
-        let solution_to_goal = &self.solutions[0];
-
         let mut solution = Solution::default();
-        let mut current_state = solution_to_goal.steps.last().unwrap().0.clone();
-        let mut current_cost = solution_to_goal.cost;
+        solution.cost = self.solutions[0].cost;
 
-        solution.steps.push((current_state.clone(), current_cost));
+        let mut current_part = self.solutions.swap_remove(0);
+        loop {
+            current_part
+                .steps
+                .drain(..)
+                .rev()
+                .for_each(|step| solution.steps.push(step));
+            current_part
+                .actions
+                .drain(..)
+                .rev()
+                .for_each(|action| solution.actions.push(action));
 
-        while let Some((action, parent_state, parent_cost)) =
-            self.parent.get(&(current_state, current_cost))
-        {
-            current_state = parent_state.clone();
-            current_cost = *parent_cost;
-            solution.steps.push((current_state.clone(), current_cost));
-            solution.actions.push(*action);
+            if let Some(previous_part) = self.solution_parts.remove(solution.steps.last().unwrap())
+            {
+                current_part = previous_part;
+            } else {
+                break;
+            }
         }
 
         solution.steps.reverse();
         solution.actions.reverse();
-        solution.cost = solution_to_goal.cost;
 
         Some(solution)
     }

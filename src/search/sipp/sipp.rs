@@ -101,6 +101,7 @@ where
             &config.constraints,
             &config.task.initial_state,
             &Interval::new(initial_time, initial_time),
+            config.precision,
             &mut self.safe_intervals,
         );
 
@@ -185,6 +186,7 @@ where
             &config.constraints,
             &config.task.goal_state,
             &config.task.goal_interval,
+            config.precision,
             &mut self.safe_intervals,
         );
         if self.safe_intervals.is_empty() {
@@ -277,12 +279,13 @@ where
                 &config.constraints,
                 &successor_state,
                 &Interval::new(current.cost + transition_cost, C::max_value()),
+                config.precision,
                 &mut self.safe_intervals,
             );
             for safe_interval in self.safe_intervals.drain(..) {
                 let mut successor_cost = current.cost + transition_cost;
 
-                if successor_cost >= safe_interval.end {
+                if successor_cost + config.precision > safe_interval.end {
                     // Cannot reach this safe interval in time
                     continue;
                 }
@@ -297,7 +300,9 @@ where
                         continue;
                     }
                     successor_cost = safe_interval.start; // Try to depart later to arrive at the right time
-                    if successor_cost - transition_cost >= current.state.safe_interval.end {
+                    if successor_cost - transition_cost + config.precision
+                        > current.state.safe_interval.end
+                    {
                         // Cannot depart that late from the current safe interval
                         continue;
                     }
@@ -380,19 +385,20 @@ where
         constraints: &Arc<ConstraintSet<S, C>>,
         state: &S,
         range: &Interval<C>,
+        precision: DC,
         safe_intervals: &mut Vec<Interval<C>>,
     ) {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
             let mut current = Interval::default();
             for constraint in state_constraints.iter() {
                 current.end = constraint.interval.start;
-                if current.start < current.end && current.overlaps(range) {
+                if current.start + precision < current.end && current.overlaps(range) {
                     safe_intervals.push(current);
                 }
                 current.start = constraint.interval.end;
             }
             current.end = Interval::default().end;
-            if current.start < current.end && current.overlaps(range) {
+            if current.start + precision < current.end && current.overlaps(range) {
                 safe_intervals.push(current);
             }
         } else {
@@ -769,6 +775,7 @@ mod tests {
             &Arc::new(constraints),
             &state,
             &Interval::default(),
+            OrderedFloat(1e-6),
             &mut safe_intervals,
         );
 
