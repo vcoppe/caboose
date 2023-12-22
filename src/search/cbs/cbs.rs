@@ -220,7 +220,6 @@ where
                     loop {
                         match Self::get_workload(shared) {
                             WorkLoad::Complete => break,
-                            WorkLoad::Aborted => break,
                             WorkLoad::Starvation => continue,
                             WorkLoad::WorkItem { node } => {
                                 Self::branch_on(shared, config, node, &mut lsipp);
@@ -610,7 +609,7 @@ where
         let mut hi = moves[1].interval.end; // Starting the move after the second agent has finished its move is always okay
 
         let mut delayed_move = moves[0].clone();
-        while hi - lo > config.precision {
+        while hi > lo + config.precision {
             let mid = lo + (hi - lo) / 2.0;
 
             delayed_move.interval.start = mid;
@@ -1174,7 +1173,6 @@ where
     DC: Default + Copy + Ord,
 {
     Complete,
-    Aborted,
     Starvation,
     WorkItem { node: Arc<CbsNode<S, A, C, DC>> },
 }
