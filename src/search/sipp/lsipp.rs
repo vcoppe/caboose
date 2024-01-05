@@ -37,7 +37,8 @@ where
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    solution_parts: FxHashMap<(Arc<SippState<S, C>>, C), Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    solution_parts:
+        FxHashMap<((Arc<SippState<S, C>>, C), usize), Solution<Arc<SippState<S, C>>, A, C, DC>>,
     landmark_states: Vec<Arc<SippState<S, C>>>,
     landmark_times: Vec<C>,
     stats: LSippStats,
@@ -104,7 +105,7 @@ where
             self.to_first_landmark(config);
             self.between_landmarks(config);
             self.to_goal(config);
-            self.get_solution()
+            self.get_solution(config)
         };
 
         solution.and_then(|sol| {
@@ -140,7 +141,7 @@ where
 
         self.solutions = self.sipp.solve_generalized(&config);
 
-        self.store_solution_parts();
+        self.store_solution_parts(0);
     }
 
     // Connect all landmarks sequentially
@@ -166,7 +167,7 @@ where
 
             self.solutions = self.sipp.solve_generalized(&config);
 
-            self.store_solution_parts();
+            self.store_solution_parts(i);
         }
     }
 
@@ -194,18 +195,21 @@ where
     }
 
     /// Stores the last solutions as solution parts
-    fn store_solution_parts(&mut self) {
+    fn store_solution_parts(&mut self, landmark: usize) {
         for solution in self.solutions.drain(..) {
             self.landmark_states
                 .push(solution.steps.last().unwrap().0.clone());
             self.landmark_times.push(solution.cost);
             self.solution_parts
-                .insert(solution.steps.last().unwrap().clone(), solution);
+                .insert((solution.steps.last().unwrap().clone(), landmark), solution);
         }
     }
 
     /// Returns the solution to the given task, if any.
-    fn get_solution(&mut self) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    fn get_solution(
+        &mut self,
+        config: &LSippConfig<TS, S, A, C, DC, H>,
+    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
         if self.solutions.is_empty() {
             return None;
         }
@@ -214,7 +218,7 @@ where
         solution.cost = self.solutions[0].cost;
 
         let mut current_part = self.solutions.swap_remove(0);
-        loop {
+        for landmark in (0..(config.landmarks.len() + 1)).rev() {
             current_part
                 .steps
                 .drain(..)
@@ -226,11 +230,12 @@ where
                 .rev()
                 .for_each(|action| solution.actions.push(action));
 
-            if let Some(previous_part) = self.solution_parts.remove(solution.steps.last().unwrap())
-            {
-                current_part = previous_part;
-            } else {
-                break;
+            if landmark > 0 {
+                current_part = self
+                    .solution_parts
+                    .remove(&(solution.steps.last().unwrap().clone(), landmark - 1))
+                    .unwrap();
+                solution.steps.pop(); // Remove the last step, as it is the first step of the next part
             }
         }
 
