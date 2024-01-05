@@ -1,22 +1,20 @@
 use std::{sync::Arc, time::Instant};
 
 use cbs::{
-    CbsConfig, ConflictBasedSearch, Graph, GraphEdgeId, GraphNodeId, MyTime, ReverseResumableAStar,
-    SimpleEdgeData, SimpleHeuristic, SimpleNodeData, SimpleState, SimpleWorld, SippState, Solution,
-    Task,
+    get_cbs_from_files, Graph, GraphEdgeId, GraphNodeId, MyTime, SimpleEdgeData, SimpleNodeData,
+    SimpleState, SippState, Solution,
 };
 use nannou::prelude::*;
 use ordered_float::OrderedFloat;
 
 struct Model {
-    width: usize,
-    height: usize,
-    scale: f32,
+    agent_size: f32,
     graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     solution:
         Option<Vec<Solution<Arc<SippState<SimpleState, MyTime>>, GraphEdgeId, MyTime, MyTime>>>,
     start_time: f32,
     colors: Vec<rgb::Rgb<nannou::color::encoding::Srgb, u8>>,
+    limits: ((f32, f32), (f32, f32)),
 }
 
 fn main() {
@@ -28,58 +26,30 @@ fn main() {
 }
 
 fn get_model() -> Model {
-    let width = 10;
-    let height = 2;
-    let scale = 60.0;
+    let (graph, mut cbs, mut config, agent_size) = get_cbs_from_files(
+        "resources/instances/grid_map.xml",
+        "resources/instances/task.xml",
+        "resources/config/config-2.xml",
+    );
+    config.use_n_agents(2);
 
-    let graph = simple_graph(width, height);
-    let transition_system = Arc::new(SimpleWorld::new(graph.clone()));
-
-    let to_id = |x: usize, y: usize| GraphNodeId(x + y * width);
-
-    let mut tasks = vec![];
-    for (from, to) in vec![
-        ((0, 0), (9, 0)),
-        ((9, 0), (0, 0)),
-        ((1, 0), (8, 0)),
-        ((8, 0), (1, 0)),
-        ((2, 0), (7, 0)),
-        ((7, 0), (2, 0)),
-        ((3, 0), (6, 0)),
-    ]
-    .iter()
-    .map(|((x1, y1), (x2, y2))| (to_id(*x1, *y1), to_id(*x2, *y2)))
-    {
-        tasks.push(Arc::new(Task::new(
-            SimpleState(from),
-            SimpleState(to),
-            OrderedFloat(0.0),
-        )));
-    }
+    let limits = (0..graph.num_nodes())
+        .map(|id| {
+            let node = graph.get_node(GraphNodeId(id));
+            (node.data.0, node.data.1)
+        })
+        .fold(
+            ((f32::MAX, f32::MAX), (f32::MIN, f32::MIN)),
+            |((min_x, min_y), (max_x, max_y)), (x, y)| {
+                ((min_x.min(x), min_y.min(y)), (max_x.max(x), max_y.max(y)))
+            },
+        );
 
     // A set of 20 colors that are visually distinct
     let colors = vec![
         BLUE, GREEN, RED, GOLD, HOTPINK, ORANGE, PURPLE, TEAL, YELLOW, CYAN, PINK, LIME, MAROON,
         NAVY, OLIVE, LAVENDER, BROWN, BEIGE, CORAL, GREY, MAGENTA, TURQUOISE,
     ];
-
-    let pivots = Arc::new(tasks.iter().map(|t| t.goal_state.clone()).collect());
-    let heuristic_to_pivots = Arc::new(
-        tasks
-            .iter()
-            .map(|t| {
-                Arc::new(ReverseResumableAStar::new(
-                    transition_system.clone(),
-                    t.clone(),
-                    SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
-                ))
-            })
-            .collect(),
-    );
-
-    let config = CbsConfig::new(tasks, pivots, heuristic_to_pivots, OrderedFloat(1e-6));
-
-    let mut cbs = ConflictBasedSearch::new(transition_system);
 
     let start = Instant::now();
     let solution = cbs.solve(&config);
@@ -98,28 +68,19 @@ fn get_model() -> Model {
     println!("Time elapsed: {:?}", duration);
 
     Model {
-        width,
-        height,
-        scale,
         graph,
+        agent_size,
         solution,
         start_time: 0.0,
         colors,
+        limits,
     }
 }
 
 fn model(app: &App) -> Model {
     let mut model = get_model();
 
-    app.new_window()
-        .size(
-            (model.width * model.scale.round() as usize) as u32,
-            (model.height * model.scale.round() as usize) as u32,
-        )
-        .view(view)
-        .build()
-        .unwrap();
-
+    app.new_window().view(view).build().unwrap();
     model.start_time = app.time;
 
     model
@@ -131,14 +92,17 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     draw.background().color(WHITE);
 
+    let window = app.window_rect().pad(50.0);
+    let scale = (window.w() / (model.limits.1 .0 - model.limits.0 .0))
+        .min(window.h() / (model.limits.1 .1 - model.limits.0 .1));
+
     let to_coordinate = |node: GraphNodeId| {
         let node = model.graph.get_node(node);
-        (vec2(node.data.0 as f32, node.data.1 as f32)
-            - vec2(
-                (model.width - 1) as f32 / 2.0,
-                (model.height - 1) as f32 / 2.0,
-            ))
-            * model.scale
+        // map node coordinates to window coordinates
+        vec2(
+            (node.data.0 - (model.limits.0 .0 + model.limits.1 .0) / 2.0) * scale,
+            (node.data.1 - (model.limits.0 .1 + model.limits.1 .1) / 2.0) * scale,
+        )
     };
 
     // Draw graph
@@ -150,7 +114,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
         draw.text(id.to_string().as_str())
             .color(BLACK)
             .font_size(18)
-            .xy(to_coordinate(GraphNodeId(id)) + vec2(model.scale, model.scale) / 5.0);
+            .xy(to_coordinate(GraphNodeId(id)) + vec2(scale, scale) / 5.0);
     }
 
     for id in 0..model.graph.num_edges() {
@@ -192,7 +156,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
                 draw.ellipse()
                     .color(model.colors[agent])
-                    .radius(0.4 * model.scale)
+                    .radius(model.agent_size * scale)
                     .xy(center);
                 draw.text(agent.to_string().as_str())
                     .color(WHITE)
@@ -207,7 +171,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
             let center = to_coordinate(solution.steps.last().unwrap().0.internal_state.0);
             draw.ellipse()
                 .color(model.colors[agent])
-                .radius(0.4 * model.scale)
+                .radius(model.agent_size * scale)
                 .xy(center);
             draw.text(agent.to_string().as_str())
                 .color(WHITE)
@@ -217,31 +181,4 @@ fn view(app: &App, model: &Model, frame: Frame) {
     }
 
     draw.to_frame(app, &frame).unwrap();
-}
-
-fn simple_graph(width: usize, height: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-    let mut graph = Graph::new();
-    for y in 0..height {
-        for x in 0..width {
-            graph.add_node((x as f32, y as f32));
-        }
-    }
-    for x in 0..width {
-        for y in 0..height {
-            let node_id = GraphNodeId(x + y * width);
-            if x > 0 {
-                graph.add_edge(node_id, GraphNodeId(x - 1 + y * width), 1.0);
-            }
-            if y > 0 {
-                graph.add_edge(node_id, GraphNodeId(x + (y - 1) * width), 1.0);
-            }
-            if x < width - 1 {
-                graph.add_edge(node_id, GraphNodeId(x + 1 + y * width), 1.0);
-            }
-            if y < height - 1 {
-                graph.add_edge(node_id, GraphNodeId(x + (y + 1) * width), 1.0);
-            }
-        }
-    }
-    Arc::new(graph)
 }

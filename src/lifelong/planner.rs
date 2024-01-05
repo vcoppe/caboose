@@ -198,7 +198,7 @@ mod tests {
     fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
 
         let initial_states = vec![
             SimpleState(GraphNodeId(0)),

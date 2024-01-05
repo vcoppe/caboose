@@ -11,6 +11,8 @@ ncollide2d = "0.33.0"
 num_cpus = "1.16.0"
 ordered-float = "4.2.0"
 parking_lot = "0.12.1"
+quick-xml = { version = "0.31.0", features = ["serialize"] }
+serde = { version = "1.0.194", features = ["derive"] }
 tuple = "0.5.2"
 
 [dev-dependencies]

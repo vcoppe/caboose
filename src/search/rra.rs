@@ -277,7 +277,7 @@ mod tests {
     fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
         let task = Arc::new(Task::new(
             SimpleState(GraphNodeId(0)),
             SimpleState(GraphNodeId(size * size - 1)),
@@ -305,7 +305,7 @@ mod tests {
     fn test_caching() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
         let task = Arc::new(Task::new(
             SimpleState(GraphNodeId(0)),
             SimpleState(GraphNodeId(size * size - 1)),

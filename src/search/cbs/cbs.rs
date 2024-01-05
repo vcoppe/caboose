@@ -903,6 +903,14 @@ where
     pub fn add_frozen(&mut self, agent: usize, solution: Solution<Arc<SippState<S, C>>, A, C, DC>) {
         self.frozen.insert(agent, solution);
     }
+
+    pub fn use_n_agents(&mut self, n_agents: usize) {
+        for agent in n_agents..self.n_agents {
+            self.frozen.remove(&agent);
+        }
+        self.n_agents = n_agents;
+        self.tasks.truncate(n_agents);
+    }
 }
 
 /// A node in the Conflict-Based Search tree.
@@ -1229,7 +1237,7 @@ mod tests {
     fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
 
         let tasks = vec![
             Arc::new(Task::new(
@@ -1277,7 +1285,7 @@ mod tests {
     fn test_frozen() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
 
         let mut tasks = vec![Arc::new(Task::new(
             SimpleState(GraphNodeId(0)),

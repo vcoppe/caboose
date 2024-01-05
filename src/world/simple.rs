@@ -20,13 +20,15 @@ pub type SimpleEdgeData = f32;
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
     graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
+    ball: Ball<f32>,
 }
 
 impl SimpleWorld {
-    const BALL: Ball<f32> = Ball { radius: 0.4 };
-
-    pub fn new(graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>) -> Self {
-        SimpleWorld { graph }
+    pub fn new(graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>, agent_size: f32) -> Self {
+        SimpleWorld {
+            graph,
+            ball: Ball { radius: agent_size },
+        }
     }
 
     pub fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> MyTime {
@@ -112,14 +114,7 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld 
         let (center2, vel2) = self.get_center_and_vel(moves[1], &initial_time);
 
         let toi = query::time_of_impact_ball_ball(
-            &center1,
-            &vel1,
-            &Self::BALL,
-            &center2,
-            &vel2,
-            &Self::BALL,
-            max_time.0,
-            0.0,
+            &center1, &vel1, &self.ball, &center2, &vel2, &self.ball, max_time.0, 0.0,
         );
 
         toi.is_some()
@@ -208,7 +203,7 @@ mod tests {
     fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
 
         let initial_time = OrderedFloat(0.0);
 

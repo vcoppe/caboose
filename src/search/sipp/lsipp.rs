@@ -38,6 +38,8 @@ where
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
     solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
     solution_parts: FxHashMap<(Arc<SippState<S, C>>, C), Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    landmark_states: Vec<Arc<SippState<S, C>>>,
+    landmark_times: Vec<C>,
     stats: LSippStats,
 }
 
@@ -66,6 +68,8 @@ where
             sipp: SafeIntervalPathPlanning::new(transition_system),
             solution_parts: FxHashMap::default(),
             solutions: vec![],
+            landmark_states: vec![],
+            landmark_times: vec![],
             stats: LSippStats::default(),
         }
     }
@@ -73,6 +77,8 @@ where
     fn init(&mut self) {
         self.solutions.clear();
         self.solution_parts.clear();
+        self.landmark_states.clear();
+        self.landmark_times.clear();
 
         self.stats.searches += 1;
     }
@@ -147,11 +153,8 @@ where
             ));
             let config = GeneralizedSippConfig::new(
                 SippTask::new(
-                    self.solutions.iter().map(|s| s.cost).collect(),
-                    self.solutions
-                        .iter()
-                        .map(|s| s.steps.last().unwrap().0.clone())
-                        .collect(),
+                    self.landmark_times.drain(..).collect(),
+                    self.landmark_states.drain(..).collect(),
                     landmark.state.clone(),
                     landmark.interval,
                     task.clone(),
@@ -176,11 +179,8 @@ where
         ));
         let config = GeneralizedSippConfig::new(
             SippTask::new(
-                self.solutions.iter().map(|s| s.cost).collect(),
-                self.solutions
-                    .iter()
-                    .map(|s| s.steps.last().unwrap().0.clone())
-                    .collect(),
+                self.landmark_times.drain(..).collect(),
+                self.landmark_states.drain(..).collect(),
                 config.task.goal_state.clone(),
                 Interval::default(),
                 task.clone(),
@@ -196,6 +196,9 @@ where
     /// Stores the last solutions as solution parts
     fn store_solution_parts(&mut self) {
         for solution in self.solutions.drain(..) {
+            self.landmark_states
+                .push(solution.steps.last().unwrap().0.clone());
+            self.landmark_times.push(solution.cost);
             self.solution_parts
                 .insert(solution.steps.last().unwrap().clone(), solution);
         }
@@ -395,7 +398,7 @@ mod tests {
     fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         for x in 0..size {
@@ -433,7 +436,7 @@ mod tests {
     fn test_with_landmarks() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
         let mut solver = SafeIntervalPathPlanningWithLandmarks::new(transition_system.clone());
 
         let task = Arc::new(Task::new(

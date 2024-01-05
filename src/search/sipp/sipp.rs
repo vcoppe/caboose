@@ -704,7 +704,7 @@ mod tests {
     fn test_simple() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         for x in 0..size {
@@ -790,7 +790,7 @@ mod tests {
     fn test_with_constraints() {
         let size = 10;
         let graph = simple_graph(size);
-        let transition_system = Arc::new(SimpleWorld::new(graph));
+        let transition_system = Arc::new(SimpleWorld::new(graph, 0.4));
         let mut solver = SafeIntervalPathPlanning::new(transition_system.clone());
 
         let task = Arc::new(Task::new(
