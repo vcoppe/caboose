@@ -162,7 +162,7 @@ pub fn parse_inputs(
 
 /// A structure that corresponds to the XML format of the mapf.info benchmark maps.
 /// Either a grid map, for example:
-/// ```
+/// ```xml
 /// <?xml version="1.0" ?>
 /// <root>
 /// <map>
@@ -177,7 +177,7 @@ pub fn parse_inputs(
 /// </root>
 /// ```
 /// Or a graph map, for example:
-/// ```
+/// ```xml
 /// <?xml version="1.0" encoding="UTF-8"?>
 /// <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
 /// <key id="key0" for="node" attr.name="coords" attr.type="string" />
@@ -245,7 +245,7 @@ pub struct Edge {
 }
 /// A structure that corresponds to the XML format of the mapf.info benchmark scenarios.
 /// Either a scenario for a grid map, for example:
-/// ```
+/// ```xml
 /// <?xml version="1.0" ?>
 /// <root>
 /// <agent id="0" start_i="8" start_j="13" goal_i="7" goal_j="8"/>
@@ -253,7 +253,7 @@ pub struct Edge {
 /// </root>
 /// ```
 /// Or a scenario for a graph map, for example:
-/// ```
+/// ```xml
 /// <?xml version="1.0" ?>
 /// <root>
 /// <agent start_id="136" goal_id="50"/>
@@ -291,7 +291,7 @@ pub fn parse_config(filename: &str) -> Result<Config, Box<dyn Error>> {
 }
 
 /// Parameters for the algorithm, example:
-/// ````
+/// ```xml
 /// <?xml version="1.0" ?>
 /// <root>
 /// <algorithm>

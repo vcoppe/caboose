@@ -26,12 +26,11 @@ fn main() {
 }
 
 fn get_model() -> Model {
-    let (graph, mut cbs, mut config, agent_size) = get_cbs_from_files(
+    let (graph, mut cbs, config, agent_size) = get_cbs_from_files(
         "resources/instances/grid_map.xml",
         "resources/instances/task.xml",
         "resources/config/config-2.xml",
     );
-    config.use_n_agents(2);
 
     let limits = (0..graph.num_nodes())
         .map(|id| {

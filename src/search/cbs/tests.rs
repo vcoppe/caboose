@@ -23,11 +23,7 @@ pub fn solve(map_file: &str, task_file: &str, config_file: &str, n_agents: usize
         .join(config_file);
     let config = config.to_str().unwrap();
 
-    println!("map: {}", map);
-    println!("task: {}", task);
-    println!("config: {}", config);
-
-    let (_, mut cbs, mut config, _) = get_cbs_from_files(&map, task_file, config_file);
+    let (_, mut cbs, mut config, _) = get_cbs_from_files(&map, &task, &config);
     config.use_n_agents(n_agents);
 
     let solution = cbs.solve(&config).unwrap();
@@ -36,6 +32,16 @@ pub fn solve(map_file: &str, task_file: &str, config_file: &str, n_agents: usize
 }
 
 #[test]
-fn a() {
-    assert!((solve("roadmaps/dense", "5_task.xml", "config-2.xml", 7).0 - 889.971).abs() < 1e-3);
+fn example() {
+    assert!(
+        (solve(
+            "empty-16-16-random",
+            "empty-16-16-random-1.xml",
+            "config-2.xml",
+            2
+        )
+        .0 - 26.0)
+            .abs()
+            < 1e-3
+    );
 }
