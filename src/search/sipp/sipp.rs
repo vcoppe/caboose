@@ -221,10 +221,11 @@ where
                 continue;
             }
 
-            if config.task.is_goal(&current) {
+            if config.task.is_goal(&current)
+                && self.goal_intervals.remove(&current.state.safe_interval)
+            {
                 // A path to the goal has been found
                 goals.push(current.clone());
-                self.goal_intervals.remove(&current.state.safe_interval);
                 if self.goal_intervals.is_empty() {
                     break;
                 }
