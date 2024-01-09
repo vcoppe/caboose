@@ -129,6 +129,7 @@ where
             Arc::new(self.tasks.iter().map(|t| t.goal_state.clone()).collect()),
             Arc::new(self.heuristic_to_pivots.clone()),
             self.collision_precision,
+            None,
         );
 
         for agent in 0..self.tasks.len() {

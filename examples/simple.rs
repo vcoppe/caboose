@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use cbs::{
     get_cbs_from_files, Graph, GraphEdgeId, GraphNodeId, MyTime, SimpleEdgeData, SimpleNodeData,
@@ -50,9 +50,7 @@ fn get_model() -> Model {
         NAVY, OLIVE, LAVENDER, BROWN, BEIGE, CORAL, GREY, MAGENTA, TURQUOISE,
     ];
 
-    let start = Instant::now();
     let solution = cbs.solve(&config);
-    let duration = start.elapsed();
 
     if let Some(solution) = &solution {
         println!(
@@ -64,7 +62,6 @@ fn get_model() -> Model {
     }
 
     println!("{:?}", cbs.get_stats());
-    println!("Time elapsed: {:?}", duration);
 
     Model {
         graph,

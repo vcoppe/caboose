@@ -6,6 +6,7 @@ use std::{
     marker::PhantomData,
     ops::{Add, Div, Sub},
     sync::Arc,
+    time::{Duration, Instant},
     vec,
 };
 
@@ -205,6 +206,7 @@ where
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
     ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
+        let start = Instant::now();
         std::thread::scope(|s| {
             for i in 0..self.n_threads {
                 let shared = &self.shared;
@@ -218,6 +220,11 @@ where
 
                 s.spawn(move || {
                     loop {
+                        if let Some(time_limit) = &config.time_limit {
+                            if start.elapsed() > *time_limit {
+                                break;
+                            }
+                        }
                         match Self::get_workload(shared) {
                             WorkLoad::Complete => break,
                             WorkLoad::Starvation => continue,
@@ -237,7 +244,7 @@ where
         });
 
         let mut critical = self.shared.critical.lock();
-
+        critical.stats.elapsed = start.elapsed();
         critical.stats.rra_stats = config
             .heuristic_to_pivots
             .iter()
@@ -865,6 +872,7 @@ where
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
     precision: DC,
+    time_limit: Option<Duration>,
     _phantom: PhantomData<(TS, A)>,
 }
 
@@ -888,6 +896,7 @@ where
         pivots: Arc<Vec<S>>,
         heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
         precision: DC,
+        time_limit: Option<Duration>,
     ) -> Self {
         Self {
             n_agents: tasks.len(),
@@ -896,6 +905,7 @@ where
             pivots,
             heuristic_to_pivots,
             precision,
+            time_limit,
             _phantom: PhantomData,
         }
     }
@@ -1189,6 +1199,7 @@ where
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CbsStats {
     pub expanded: usize,
+    pub elapsed: Duration,
     pub lsipp_stats: LSippStats,
     pub rra_stats: RraStats,
 }
@@ -1266,7 +1277,7 @@ mod tests {
                 .collect(),
         );
 
-        let config = CbsConfig::new(tasks, pivots, heuristic_to_pivots, OrderedFloat(1e-6));
+        let config = CbsConfig::new(tasks, pivots, heuristic_to_pivots, OrderedFloat(1e-6), None);
 
         let mut solver = ConflictBasedSearch::new(transition_system.clone());
 
@@ -1305,6 +1316,7 @@ mod tests {
             Arc::new(pivots.clone()),
             Arc::new(heuristic_to_pivots.clone()),
             OrderedFloat(1e-6),
+            None,
         );
 
         let mut solver = ConflictBasedSearch::new(transition_system.clone());
@@ -1330,6 +1342,7 @@ mod tests {
             Arc::new(pivots.clone()),
             Arc::new(heuristic_to_pivots),
             OrderedFloat(1e-6),
+            None,
         );
         config.add_frozen(0, solutions.pop().unwrap());
 

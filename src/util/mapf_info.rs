@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, fs::File, io::Read, sync::Arc};
+use std::{collections::HashMap, error::Error, fs::File, io::Read, sync::Arc, time::Duration};
 
 use ordered_float::OrderedFloat;
 use quick_xml::{de::from_str, DeError};
@@ -45,6 +45,7 @@ pub fn get_cbs_from_files(
             pivots,
             heuristic_to_pivots,
             OrderedFloat(config.precision),
+            Some(Duration::from_secs_f32(config.time_limit)),
         ),
         config.agent_size,
     )
@@ -318,4 +319,6 @@ pub struct Config {
     pub agent_size: f32,
     pub connectedness: usize,
     pub precision: f32,
+    #[serde(rename = "timelimit")]
+    pub time_limit: f32,
 }
