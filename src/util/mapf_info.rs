@@ -121,8 +121,8 @@ pub fn parse_inputs(
         }
 
         for agent in scenario.agents {
-            let initial_state = SimpleState(grid[agent.start_j.unwrap()][agent.start_i.unwrap()]);
-            let goal_state = SimpleState(grid[agent.goal_j.unwrap()][agent.goal_i.unwrap()]);
+            let initial_state = SimpleState(grid[agent.start_i.unwrap()][agent.start_j.unwrap()]);
+            let goal_state = SimpleState(grid[agent.goal_i.unwrap()][agent.goal_j.unwrap()]);
             tasks.push(Arc::new(Task::new(
                 initial_state,
                 goal_state,

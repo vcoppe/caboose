@@ -872,7 +872,7 @@ where
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
     precision: DC,
-    time_limit: Option<Duration>,
+    pub time_limit: Option<Duration>,
     _phantom: PhantomData<(TS, A)>,
 }
 
