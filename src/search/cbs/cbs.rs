@@ -618,6 +618,10 @@ where
         let mut delayed_move = moves[0].clone();
         while hi > lo + config.precision {
             let mid = lo + (hi - lo) / 2.0;
+            if mid <= lo || mid >= hi {
+                // Can happen due to floating point precision
+                break;
+            }
 
             delayed_move.interval.start = mid;
             delayed_move.interval.end = mid + (moves[0].interval.end - moves[0].interval.start);
@@ -912,14 +916,6 @@ where
 
     pub fn add_frozen(&mut self, agent: usize, solution: Solution<Arc<SippState<S, C>>, A, C, DC>) {
         self.frozen.insert(agent, solution);
-    }
-
-    pub fn use_n_agents(&mut self, n_agents: usize) {
-        for agent in n_agents..self.n_agents {
-            self.frozen.remove(&agent);
-        }
-        self.n_agents = n_agents;
-        self.tasks.truncate(n_agents);
     }
 }
 

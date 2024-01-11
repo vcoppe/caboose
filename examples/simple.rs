@@ -27,11 +27,11 @@ fn main() {
 
 fn get_model() -> Model {
     let (graph, mut cbs, config, agent_size) = get_cbs_from_files(
-        "resources/instances/grid_map.xml",
-        "resources/instances/task.xml",
+        "resources/instances/den520d_random/map.xml",
+        "resources/instances/den520d_random/den520d-random-20.xml",
         "resources/config/config-2.xml",
+        29,
     );
-
     let limits = (0..graph.num_nodes())
         .map(|id| {
             let node = graph.get_node(GraphNodeId(id));

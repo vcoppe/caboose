@@ -317,7 +317,7 @@ where
                     .map(|c| c.interval)
                 }) {
                     if successor_cost - transition_cost + config.precision
-                        > collision_interval.start
+                        >= collision_interval.start
                     {
                         // Collision detected
                         if !self

@@ -7,7 +7,7 @@
         <connectedness>4</connectedness>
         <focal_weight>1.0</focal_weight>
         <agent_size>0.4</agent_size>
-        <timelimit>5</timelimit>
+        <timelimit>30</timelimit>
         <precision>0.000001</precision>
     </algorithm>
 </root>

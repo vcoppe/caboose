@@ -125,12 +125,12 @@ where
         data.stats.new_query += 1;
 
         while let Some(Reverse(current)) = data.queue.pop() {
-            data.closed.insert(current.state.clone()); // Mark the state as closed because the optimal distance has been found
-
             if current.cost > data.distance[&current.state] {
                 // A better path has already been found
                 continue;
             }
+
+            data.closed.insert(current.state.clone()); // Mark the state as closed because the optimal distance has been found
 
             if *current.state == *state {
                 // The optimal distance has been found

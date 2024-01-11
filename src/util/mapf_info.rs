@@ -14,13 +14,14 @@ pub fn get_cbs_from_files(
     map_file: &str,
     task_file: &str,
     config_file: &str,
+    n_agents: usize,
 ) -> (
     Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     ConflictBasedSearch<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
     CbsConfig<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
     f32,
 ) {
-    let (graph, tasks, config) = parse_inputs(map_file, task_file, config_file).unwrap();
+    let (graph, tasks, config) = parse_inputs(map_file, task_file, config_file, n_agents).unwrap();
     let transition_system = Arc::new(SimpleWorld::new(graph.clone(), config.agent_size));
 
     let pivots = Arc::new(tasks.iter().map(|t| t.goal_state.clone()).collect());
@@ -64,6 +65,7 @@ pub fn parse_inputs(
     map_file: &str,
     task_file: &str,
     config_file: &str,
+    n_agents: usize,
 ) -> Result<
     (
         Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
@@ -78,7 +80,8 @@ pub fn parse_inputs(
 
     let contents = read_from_file(task_file)?;
     let data: Result<Scenario, DeError> = from_str(&contents);
-    let scenario = data?;
+    let mut scenario = data?;
+    scenario.agents.truncate(n_agents);
 
     let config = parse_config(config_file)?;
 
