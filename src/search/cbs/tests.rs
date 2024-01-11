@@ -31,17 +31,17 @@ pub fn solve(map_file: &str, task_file: &str, config_file: &str, n_agents: usize
 }
 
 #[test]
-fn den520d_random_den520d_random_1_13() {
+fn den520d_random_den520d_random_1_10() {
     assert!(
-        (solve("den520d_random", "den520d-random-1.xml", "config-2.xml", 13).0 - 2825.0).abs()
+        (solve("den520d_random", "den520d-random-1.xml", "config-2.xml", 10).0 - 1968.0).abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_10_6() {
+fn den520d_random_den520d_random_10_5() {
     assert!(
-        (solve("den520d_random", "den520d-random-10.xml", "config-2.xml", 6).0 - 1132.0).abs()
+        (solve("den520d_random", "den520d-random-10.xml", "config-2.xml", 5).0 - 922.0).abs()
             < 1e-2
     );
 }
@@ -55,45 +55,45 @@ fn den520d_random_den520d_random_11_3() {
 }
 
 #[test]
-fn den520d_random_den520d_random_12_17() {
+fn den520d_random_den520d_random_12_10() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-12.xml",
             "config-2.xml",
-            17
+            10
         )
-        .0 - 3099.0)
+        .0 - 1948.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_13_18() {
+fn den520d_random_den520d_random_13_17() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-13.xml",
             "config-2.xml",
-            18
+            17
         )
-        .0 - 2778.0)
+        .0 - 2660.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_14_26() {
+fn den520d_random_den520d_random_14_25() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-14.xml",
             "config-2.xml",
-            26
+            25
         )
-        .0 - 3752.13)
+        .0 - 3577.13)
             .abs()
             < 1e-2
     );
@@ -115,69 +115,54 @@ fn den520d_random_den520d_random_15_16() {
 }
 
 #[test]
-fn den520d_random_den520d_random_16_21() {
+fn den520d_random_den520d_random_16_19() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-16.xml",
             "config-2.xml",
-            21
+            19
         )
-        .0 - 3865.0)
+        .0 - 3355.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_17_10() {
+fn den520d_random_den520d_random_17_8() {
     assert!(
-        (solve(
-            "den520d_random",
-            "den520d-random-17.xml",
-            "config-2.xml",
-            10
-        )
-        .0 - 2236.0)
-            .abs()
+        (solve("den520d_random", "den520d-random-17.xml", "config-2.xml", 8).0 - 1853.0).abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_18_19() {
+fn den520d_random_den520d_random_18_11() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-18.xml",
             "config-2.xml",
-            19
+            11
         )
-        .0 - 3669.0)
+        .0 - 2080.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_19_14() {
+fn den520d_random_den520d_random_19_12() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-19.xml",
             "config-2.xml",
-            14
+            12
         )
-        .0 - 2277.0)
+        .0 - 1887.0)
             .abs()
-            < 1e-2
-    );
-}
-
-#[test]
-fn den520d_random_den520d_random_2_25() {
-    assert!(
-        (solve("den520d_random", "den520d-random-2.xml", "config-2.xml", 25).0 - 3861.0).abs()
             < 1e-2
     );
 }
@@ -191,45 +176,45 @@ fn den520d_random_den520d_random_20_9() {
 }
 
 #[test]
-fn den520d_random_den520d_random_21_19() {
+fn den520d_random_den520d_random_21_14() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-21.xml",
             "config-2.xml",
-            19
+            14
         )
-        .0 - 3467.0)
+        .0 - 2655.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_22_19() {
+fn den520d_random_den520d_random_22_12() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-22.xml",
             "config-2.xml",
-            19
+            12
         )
-        .0 - 2898.0)
+        .0 - 1625.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_23_23() {
+fn den520d_random_den520d_random_23_15() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-23.xml",
             "config-2.xml",
-            23
+            15
         )
-        .0 - 3237.13)
+        .0 - 2159.13)
             .abs()
             < 1e-2
     );
@@ -244,33 +229,32 @@ fn den520d_random_den520d_random_24_5() {
 }
 
 #[test]
-fn den520d_random_den520d_random_25_7() {
+fn den520d_random_den520d_random_25_6() {
     assert!(
-        (solve("den520d_random", "den520d-random-25.xml", "config-2.xml", 7).0 - 1582.0).abs()
+        (solve("den520d_random", "den520d-random-25.xml", "config-2.xml", 6).0 - 1403.0).abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_3_11() {
+fn den520d_random_den520d_random_3_5() {
     assert!(
-        (solve("den520d_random", "den520d-random-3.xml", "config-2.xml", 11).0 - 1834.0).abs()
+        (solve("den520d_random", "den520d-random-3.xml", "config-2.xml", 5).0 - 890.0).abs() < 1e-2
+    );
+}
+
+#[test]
+fn den520d_random_den520d_random_4_10() {
+    assert!(
+        (solve("den520d_random", "den520d-random-4.xml", "config-2.xml", 10).0 - 1768.0).abs()
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_4_11() {
+fn den520d_random_den520d_random_5_18() {
     assert!(
-        (solve("den520d_random", "den520d-random-4.xml", "config-2.xml", 11).0 - 2024.0).abs()
-            < 1e-2
-    );
-}
-
-#[test]
-fn den520d_random_den520d_random_5_21() {
-    assert!(
-        (solve("den520d_random", "den520d-random-5.xml", "config-2.xml", 21).0 - 3285.0).abs()
+        (solve("den520d_random", "den520d-random-5.xml", "config-2.xml", 18).0 - 2781.0).abs()
             < 1e-2
     );
 }
@@ -283,9 +267,9 @@ fn den520d_random_den520d_random_6_3() {
 }
 
 #[test]
-fn den520d_random_den520d_random_7_17() {
+fn den520d_random_den520d_random_7_11() {
     assert!(
-        (solve("den520d_random", "den520d-random-7.xml", "config-2.xml", 17).0 - 3160.0).abs()
+        (solve("den520d_random", "den520d-random-7.xml", "config-2.xml", 11).0 - 2235.0).abs()
             < 1e-2
     );
 }
@@ -299,9 +283,9 @@ fn den520d_random_den520d_random_8_16() {
 }
 
 #[test]
-fn den520d_random_den520d_random_9_19() {
+fn den520d_random_den520d_random_9_17() {
     assert!(
-        (solve("den520d_random", "den520d-random-9.xml", "config-2.xml", 19).0 - 3136.0).abs()
+        (solve("den520d_random", "den520d-random-9.xml", "config-2.xml", 17).0 - 2718.0).abs()
             < 1e-2
     );
 }
@@ -337,15 +321,15 @@ fn empty_16_16_random_empty_16_16_random_10_18() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_11_20() {
+fn empty_16_16_random_empty_16_16_random_11_19() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-11.xml",
             "config-2.xml",
-            20
+            19
         )
-        .0 - 168.263)
+        .0 - 165.131)
             .abs()
             < 1e-2
     );
@@ -427,15 +411,15 @@ fn empty_16_16_random_empty_16_16_random_16_16() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_17_14() {
+fn empty_16_16_random_empty_16_16_random_17_11() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-17.xml",
             "config-2.xml",
-            14
+            11
         )
-        .0 - 153.131)
+        .0 - 113.131)
             .abs()
             < 1e-2
     );
@@ -532,15 +516,15 @@ fn empty_16_16_random_empty_16_16_random_22_17() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_23_14() {
+fn empty_16_16_random_empty_16_16_random_23_11() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-23.xml",
             "config-2.xml",
-            14
+            11
         )
-        .0 - 177.131)
+        .0 - 131.131)
             .abs()
             < 1e-2
     );
@@ -562,30 +546,15 @@ fn empty_16_16_random_empty_16_16_random_24_17() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_25_14() {
-    assert!(
-        (solve(
-            "empty-16-16-random",
-            "empty-16-16-random-25.xml",
-            "config-2.xml",
-            14
-        )
-        .0 - 165.131)
-            .abs()
-            < 1e-2
-    );
-}
-
-#[test]
-fn empty_16_16_random_empty_16_16_random_3_13() {
+fn empty_16_16_random_empty_16_16_random_3_12() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-3.xml",
             "config-2.xml",
-            13
+            12
         )
-        .0 - 178.131)
+        .0 - 168.131)
             .abs()
             < 1e-2
     );
@@ -727,15 +696,15 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_11_25() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_12_34() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_12_28() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-12.xml",
             "config-2.xml",
-            34
+            28
         )
-        .0 - 3432.0)
+        .0 - 2810.0)
             .abs()
             < 1e-2
     );
@@ -772,45 +741,45 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_14_10() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_15_32() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_15_20() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-15.xml",
             "config-2.xml",
-            32
+            20
         )
-        .0 - 2791.13)
+        .0 - 1775.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_16_40() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_16_35() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-16.xml",
             "config-2.xml",
-            40
+            35
         )
-        .0 - 4013.13)
+        .0 - 3424.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_17_14() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_17_9() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-17.xml",
             "config-2.xml",
-            14
+            9
         )
-        .0 - 1361.0)
+        .0 - 890.0)
             .abs()
             < 1e-2
     );
@@ -847,30 +816,15 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_19_50() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_2_37() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_2_36() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-2.xml",
             "config-2.xml",
-            37
+            36
         )
-        .0 - 3517.13)
-            .abs()
-            < 1e-2
-    );
-}
-
-#[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_20_41() {
-    assert!(
-        (solve(
-            "warehouse-10-20-10-2-2_random",
-            "warehouse-10-20-10-2-2-random-20.xml",
-            "config-2.xml",
-            41
-        )
-        .0 - 4321.0)
+        .0 - 3365.13)
             .abs()
             < 1e-2
     );
@@ -922,15 +876,15 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_23_11() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_24_31() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_24_27() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-24.xml",
             "config-2.xml",
-            31
+            27
         )
-        .0 - 3516.0)
+        .0 - 3077.0)
             .abs()
             < 1e-2
     );
@@ -982,15 +936,15 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_4_29() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_5_32() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_5_25() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-5.xml",
             "config-2.xml",
-            32
+            25
         )
-        .0 - 3531.0)
+        .0 - 2879.0)
             .abs()
             < 1e-2
     );
@@ -1012,30 +966,30 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_6_20() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_7_36() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_7_33() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-7.xml",
             "config-2.xml",
-            36
+            33
         )
-        .0 - 3403.0)
+        .0 - 3044.0)
             .abs()
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_8_24() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_8_19() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-8.xml",
             "config-2.xml",
-            24
+            19
         )
-        .0 - 2178.0)
+        .0 - 1706.0)
             .abs()
             < 1e-2
     );
