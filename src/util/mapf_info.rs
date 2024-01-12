@@ -19,7 +19,7 @@ pub fn get_cbs_from_files(
     Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     ConflictBasedSearch<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
     CbsConfig<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
-    f32,
+    f64,
 ) {
     let (graph, tasks, config) = parse_inputs(map_file, task_file, config_file, n_agents).unwrap();
     let transition_system = Arc::new(SimpleWorld::new(graph.clone(), config.agent_size));
@@ -46,7 +46,7 @@ pub fn get_cbs_from_files(
             pivots,
             heuristic_to_pivots,
             OrderedFloat(config.precision),
-            Some(Duration::from_secs_f32(config.time_limit)),
+            Some(Duration::from_secs_f64(config.time_limit)),
         ),
         config.agent_size,
     )
@@ -96,7 +96,7 @@ pub fn parse_inputs(
                     // 1 is an obstacle
                     continue;
                 }
-                grid[y][x] = graph.add_node((x as f32, y as f32));
+                grid[y][x] = graph.add_node((x as f64, y as f64));
             }
         }
 
@@ -139,7 +139,7 @@ pub fn parse_inputs(
                 .position
                 .split(",")
                 .map(|n| n.parse().unwrap())
-                .collect::<Vec<f32>>();
+                .collect::<Vec<f64>>();
             nodes.insert(node.id, graph.add_node((position[0], position[1])));
         }
         for edge in map.edges {
@@ -245,7 +245,7 @@ pub struct Edge {
     #[serde(rename = "@target")]
     target: String,
     #[serde(rename = "data")]
-    weight: f32,
+    weight: f64,
 }
 /// A structure that corresponds to the XML format of the mapf.info benchmark scenarios.
 /// Either a scenario for a grid map, for example:
@@ -319,9 +319,9 @@ pub struct ConfigRoot {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub agent_size: f32,
+    pub agent_size: f64,
     pub connectedness: usize,
-    pub precision: f32,
+    pub precision: f64,
     #[serde(rename = "timelimit")]
-    pub time_limit: f32,
+    pub time_limit: f64,
 }

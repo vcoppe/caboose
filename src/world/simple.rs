@@ -13,18 +13,18 @@ use crate::{
     TransitionSystem,
 };
 
-pub type MyTime = OrderedFloat<f32>;
-pub type SimpleNodeData = (f32, f32);
-pub type SimpleEdgeData = f32;
+pub type MyTime = OrderedFloat<f64>;
+pub type SimpleNodeData = (f64, f64);
+pub type SimpleEdgeData = f64;
 
 /// A world simply described by a directed weighted graph
 pub struct SimpleWorld {
     graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
-    ball: Ball<f32>,
+    ball: Ball<f64>,
 }
 
 impl SimpleWorld {
-    pub fn new(graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>, agent_size: f32) -> Self {
+    pub fn new(graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>, agent_size: f64) -> Self {
         SimpleWorld {
             graph,
             ball: Ball { radius: agent_size },
@@ -48,7 +48,7 @@ impl SimpleWorld {
         &self,
         m: &Move<SimpleState, GraphEdgeId, MyTime>,
         initial_time: &MyTime,
-    ) -> (Point2<f32>, Vector2<f32>) {
+    ) -> (Point2<f64>, Vector2<f64>) {
         let interval = &m.interval;
         let from = self.graph.get_node(m.from.0).data;
         let to = self.graph.get_node(m.to.0).data;
@@ -152,11 +152,11 @@ impl MinimalHeuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for
 
 impl LimitValues for MyTime {
     fn min_value() -> Self {
-        f32::MIN.into()
+        f64::MIN.into()
     }
 
     fn max_value() -> Self {
-        f32::MAX.into()
+        f64::MAX.into()
     }
 }
 
@@ -176,7 +176,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32));
+                graph.add_node((x as f64, y as f64));
             }
         }
         for x in 0..size {

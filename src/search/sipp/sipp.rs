@@ -310,31 +310,46 @@ where
                 }
 
                 // Check collision along the action
-                if let Some(collision_interval) = action_constraints.and_then(|col| {
-                    col.get(col.partition_point(|c| {
-                        c.interval.end + config.precision < successor_cost - transition_cost
-                    }))
-                    .map(|c| c.interval)
-                }) {
-                    if successor_cost - transition_cost + config.precision
-                        >= collision_interval.start
+                if let Some(action_constraints) = action_constraints {
+                    let mut i = action_constraints
+                        .partition_point(|c| c.interval.end < successor_cost - transition_cost);
+
+                    let mut collision = false;
+                    while i < action_constraints.len()
+                        && successor_cost - transition_cost >= action_constraints[i].interval.start
+                        && successor_cost - transition_cost <= action_constraints[i].interval.end
                     {
-                        // Collision detected
-                        if !self
-                            .transition_system
-                            .can_wait_at(&current.state.internal_state)
-                        {
-                            // Cannot wait at the current state
-                            continue;
-                        }
-                        successor_cost = collision_interval.end + transition_cost; // Try to depart later
+                        let collision_interval = &action_constraints[i].interval;
 
                         if successor_cost - transition_cost + config.precision
-                            > current.state.safe_interval.end
-                            || successor_cost + config.precision > safe_interval.end
+                            >= collision_interval.start
                         {
-                            continue;
+                            // Collision detected
+                            if !self
+                                .transition_system
+                                .can_wait_at(&current.state.internal_state)
+                            {
+                                // Cannot wait at the current state
+                                collision = true;
+                                break;
+                            }
+                            successor_cost = collision_interval.end + transition_cost; // Try to depart later
+
+                            if successor_cost - transition_cost + config.precision
+                                > current.state.safe_interval.end
+                                || successor_cost + config.precision > safe_interval.end
+                            {
+                                // Cannot depart that late from the current safe interval
+                                collision = true;
+                                break;
+                            }
                         }
+
+                        i += 1;
+                    }
+
+                    if collision {
+                        continue;
                     }
                 }
 
@@ -678,7 +693,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32));
+                graph.add_node((x as f64, y as f64));
             }
         }
         for x in 0..size {
@@ -731,7 +746,7 @@ mod tests {
                 let after = solver.get_stats();
                 assert_eq!(
                     solution.cost,
-                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
+                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f64)
                 );
                 assert_eq!(after.searches, before.searches + 1);
                 // Check that the perfect heuristic works

@@ -250,7 +250,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32));
+                graph.add_node((x as f64, y as f64));
             }
         }
         for x in 0..size {
@@ -295,7 +295,7 @@ mod tests {
                     heuristic
                         .get_heuristic(&SimpleState(GraphNodeId(x + y * size)))
                         .unwrap(),
-                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
+                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f64)
                 );
             }
         }

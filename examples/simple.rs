@@ -8,7 +8,7 @@ use nannou::prelude::*;
 use ordered_float::OrderedFloat;
 
 struct Model {
-    agent_size: f32,
+    agent_size: f64,
     graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     solution:
         Option<Vec<Solution<Arc<SippState<SimpleState, MyTime>>, GraphEdgeId, MyTime, MyTime>>>,
@@ -27,10 +27,10 @@ fn main() {
 
 fn get_model() -> Model {
     let (graph, mut cbs, config, agent_size) = get_cbs_from_files(
-        "resources/instances/den520d_random/map.xml",
-        "resources/instances/den520d_random/den520d-random-20.xml",
+        "resources/instances/roadmaps/sparse/map.xml",
+        "resources/instances/roadmaps/sparse/22_task.xml",
         "resources/config/config-2.xml",
-        29,
+        9,
     );
     let limits = (0..graph.num_nodes())
         .map(|id| {
@@ -40,7 +40,10 @@ fn get_model() -> Model {
         .fold(
             ((f32::MAX, f32::MAX), (f32::MIN, f32::MIN)),
             |((min_x, min_y), (max_x, max_y)), (x, y)| {
-                ((min_x.min(x), min_y.min(y)), (max_x.max(x), max_y.max(y)))
+                (
+                    (min_x.min(x as f32), min_y.min(y as f32)),
+                    (max_x.max(x as f32), max_y.max(y as f32)),
+                )
             },
         );
 
@@ -96,8 +99,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
         let node = model.graph.get_node(node);
         // map node coordinates to window coordinates
         vec2(
-            (node.data.0 - (model.limits.0 .0 + model.limits.1 .0) / 2.0) * scale,
-            (node.data.1 - (model.limits.0 .1 + model.limits.1 .1) / 2.0) * scale,
+            (node.data.0 as f32 - (model.limits.0 .0 + model.limits.1 .0) / 2.0) * scale,
+            (node.data.1 as f32 - (model.limits.0 .1 + model.limits.1 .1) / 2.0) * scale,
         )
     };
 
@@ -123,7 +126,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     // Draw agents
     let elapsed = app.time - model.start_time;
-    let mut current_time = OrderedFloat(elapsed);
+    let mut current_time = OrderedFloat(elapsed as f64);
 
     let solutions = model.solution.as_ref().unwrap();
 
@@ -145,14 +148,14 @@ fn view(app: &App, model: &Model, frame: Frame) {
                 let to = to_coordinate(solution.steps[i + 1].0.internal_state.0);
 
                 let delta = to - from;
-                let progress_time = current_time - solution.steps[i].1;
+                let progress_time = (current_time - solution.steps[i].1).0 as f32;
                 let move_time = solution.steps[i + 1].1 - solution.steps[i].1;
-                let vel = delta / move_time.0;
-                let center = from + vel * progress_time.0;
+                let vel = delta / move_time.0 as f32;
+                let center = from + vel * progress_time;
 
                 draw.ellipse()
                     .color(model.colors[agent])
-                    .radius(model.agent_size * scale)
+                    .radius(model.agent_size as f32 * scale)
                     .xy(center);
                 draw.text(agent.to_string().as_str())
                     .color(WHITE)
@@ -167,7 +170,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
             let center = to_coordinate(solution.steps.last().unwrap().0.internal_state.0);
             draw.ellipse()
                 .color(model.colors[agent])
-                .radius(model.agent_size * scale)
+                .radius(model.agent_size as f32 * scale)
                 .xy(center);
             draw.text(agent.to_string().as_str())
                 .color(WHITE)

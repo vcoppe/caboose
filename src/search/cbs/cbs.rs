@@ -71,7 +71,7 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
     n_threads: usize,
@@ -97,7 +97,7 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
@@ -1217,7 +1217,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32));
+                graph.add_node((x as f64, y as f64));
             }
         }
         for x in 0..size {
@@ -1283,7 +1283,7 @@ mod tests {
             solutions
                 .iter()
                 .map(|sol| sol.cost)
-                .sum::<OrderedFloat<f32>>(),
+                .sum::<OrderedFloat<f64>>(),
             OrderedFloat(20.0)
         );
     }

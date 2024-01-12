@@ -31,7 +31,7 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
     H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
 {
     transition_system: Arc<TS>,
@@ -60,7 +60,7 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f32, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
     H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
 {
     pub fn new(
@@ -164,7 +164,7 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, LifelongConfig, Planner, SimpleEdgeData, SimpleHeuristic,
+        Graph, GraphEdgeId, GraphNodeId, LifelongConfig, Planner, SimpleEdgeData, SimpleHeuristic,
         SimpleNodeData, SimpleState, SimpleWorld, Task,
     };
 
@@ -172,7 +172,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32));
+                graph.add_node((x as f64, y as f64));
             }
         }
         for x in 0..size {
@@ -210,9 +210,9 @@ mod tests {
         let mut planner: Planner<
             SimpleWorld,
             SimpleState,
-            crate::GraphEdgeId,
-            OrderedFloat<f32>,
-            OrderedFloat<f32>,
+            GraphEdgeId,
+            OrderedFloat<f64>,
+            OrderedFloat<f64>,
             SimpleHeuristic,
         > = Planner::new(
             transition_system,

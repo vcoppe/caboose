@@ -376,7 +376,7 @@ mod tests {
         let mut graph = Graph::new();
         for x in 0..size {
             for y in 0..size {
-                graph.add_node((x as f32, y as f32));
+                graph.add_node((x as f64, y as f64));
             }
         }
         for x in 0..size {
@@ -429,7 +429,7 @@ mod tests {
                 let after = solver.get_stats();
                 assert_eq!(
                     solution.cost,
-                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f32)
+                    OrderedFloat(((size - x - 1) + (size - y - 1)) as f64)
                 );
                 assert_eq!(after.searches, before.searches + 1);
                 assert_eq!(after.sipp_stats.searches, before.sipp_stats.searches + 1);
@@ -474,7 +474,7 @@ mod tests {
         let before = solver.get_stats();
         let solution = solver.solve(&config).unwrap();
         let after = solver.get_stats();
-        assert_eq!(solution.cost, OrderedFloat((4 * (size - 1)) as f32));
+        assert_eq!(solution.cost, OrderedFloat((4 * (size - 1)) as f64));
         assert_eq!(after.searches, before.searches + 1);
         assert_eq!(after.sipp_stats.searches, before.sipp_stats.searches + 3);
     }
