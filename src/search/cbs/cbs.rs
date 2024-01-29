@@ -74,7 +74,6 @@ where
     DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
-    n_threads: usize,
     shared: Shared<TS, S, A, C, DC>,
     _phantom: PhantomData<H>,
 }
@@ -102,7 +101,6 @@ where
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
-            n_threads: num_cpus::get(),
             shared: Shared {
                 transition_system,
                 critical: Mutex::new(Critical {
@@ -208,7 +206,7 @@ where
     ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
         let start = Instant::now();
         std::thread::scope(|s| {
-            for i in 0..self.n_threads {
+            for i in 0..config.n_threads {
                 let shared = &self.shared;
 
                 let mut lsipp =
@@ -876,6 +874,7 @@ where
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
     precision: DC,
+    n_threads: usize,
     pub time_limit: Option<Duration>,
     _phantom: PhantomData<(TS, A)>,
 }
@@ -900,6 +899,7 @@ where
         pivots: Arc<Vec<S>>,
         heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
         precision: DC,
+        n_threads: usize,
         time_limit: Option<Duration>,
     ) -> Self {
         Self {
@@ -909,6 +909,7 @@ where
             pivots,
             heuristic_to_pivots,
             precision,
+            n_threads,
             time_limit,
             _phantom: PhantomData,
         }
@@ -1273,7 +1274,14 @@ mod tests {
                 .collect(),
         );
 
-        let config = CbsConfig::new(tasks, pivots, heuristic_to_pivots, OrderedFloat(1e-6), None);
+        let config = CbsConfig::new(
+            tasks,
+            pivots,
+            heuristic_to_pivots,
+            OrderedFloat(1e-6),
+            1,
+            None,
+        );
 
         let mut solver = ConflictBasedSearch::new(transition_system.clone());
 
@@ -1312,6 +1320,7 @@ mod tests {
             Arc::new(pivots.clone()),
             Arc::new(heuristic_to_pivots.clone()),
             OrderedFloat(1e-6),
+            1,
             None,
         );
 
@@ -1338,6 +1347,7 @@ mod tests {
             Arc::new(pivots.clone()),
             Arc::new(heuristic_to_pivots),
             OrderedFloat(1e-6),
+            1,
             None,
         );
         config.add_frozen(0, solutions.pop().unwrap());

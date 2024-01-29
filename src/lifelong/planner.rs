@@ -129,6 +129,7 @@ where
             Arc::new(self.tasks.iter().map(|t| t.goal_state.clone()).collect()),
             Arc::new(self.heuristic_to_pivots.clone()),
             self.collision_precision,
+            config.n_threads,
             None,
         );
 
@@ -154,6 +155,7 @@ where
     C: Copy,
 {
     pub tasks: FxHashMap<usize, Arc<Task<S, C>>>, // TODO: only require new destination and use current position as initial state?
+    n_threads: usize,
 }
 
 #[cfg(test)]
@@ -223,6 +225,7 @@ mod tests {
 
         let mut config = LifelongConfig {
             tasks: FxHashMap::default(),
+            n_threads: 1,
         };
 
         config.tasks.insert(

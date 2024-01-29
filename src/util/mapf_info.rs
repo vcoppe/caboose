@@ -15,6 +15,7 @@ pub fn get_cbs_from_files(
     task_file: &str,
     config_file: &str,
     n_agents: usize,
+    n_threads: usize,
 ) -> (
     Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
     ConflictBasedSearch<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime, SimpleHeuristic>,
@@ -46,6 +47,7 @@ pub fn get_cbs_from_files(
             pivots,
             heuristic_to_pivots,
             OrderedFloat(config.precision),
+            n_threads,
             Some(Duration::from_secs_f64(config.time_limit)),
         ),
         config.agent_size,

@@ -23,7 +23,7 @@ pub fn solve(map_file: &str, task_file: &str, config_file: &str, n_agents: usize
         .join(config_file);
     let config = config.to_str().unwrap();
 
-    let (_, mut cbs, config, _) = get_cbs_from_files(&map, &task, &config, n_agents);
+    let (_, mut cbs, config, _) = get_cbs_from_files(&map, &task, &config, n_agents, 1);
 
     let solution = cbs.solve(&config).unwrap();
 

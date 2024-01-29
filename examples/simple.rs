@@ -31,6 +31,7 @@ fn get_model() -> Model {
         "resources/instances/roadmaps/sparse/22_task.xml",
         "resources/config/config-2.xml",
         9,
+        num_cpus::get(),
     );
     let limits = (0..graph.num_nodes())
         .map(|id| {
