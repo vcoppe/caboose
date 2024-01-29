@@ -4,7 +4,10 @@
 [![codecov](https://codecov.io/gh/vcoppe/cbs/graph/badge.svg?token=219FLVZLS6)](https://codecov.io/gh/vcoppe/cbs)
 ![GitHub](https://img.shields.io/github/license/vcoppe/cbs)
 
-A library implementating the *Continuous Conflict-Based Search* algorithm (CCBS) for the *Multi-Agent Path Finding* problem (MAPF), but **generic**, **parallel** and in **Rust**.
+> [!WARNING]  
+> This library is still in its early development phase.
+
+A library implementing the *Continuous Conflict-Based Search* algorithm (CCBS) for the *Multi-Agent Path Finding* problem (MAPF), but **generic**, **parallel** and in **Rust**.
 
 ![](resources/demo.gif)
 
