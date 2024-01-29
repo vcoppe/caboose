@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cbs::{
+use caboose::{
     get_cbs_from_files, Graph, GraphEdgeId, GraphNodeId, MyTime, SimpleEdgeData, SimpleNodeData,
     SimpleState, SippState, Solution,
 };
@@ -27,10 +27,10 @@ fn main() {
 
 fn get_model() -> Model {
     let (graph, mut cbs, config, agent_size) = get_cbs_from_files(
-        "resources/instances/roadmaps/sparse/map.xml",
-        "resources/instances/roadmaps/sparse/22_task.xml",
+        "resources/instances/grid_map.xml",
+        "resources/instances/task.xml",
         "resources/config/config-2.xml",
-        9,
+        6,
         num_cpus::get(),
     );
     let limits = (0..graph.num_nodes())

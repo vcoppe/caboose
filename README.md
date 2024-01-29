@@ -1,13 +1,13 @@
-# cbs
+# Caboose
 
 [![Rust](https://github.com/vcoppe/cbs/actions/workflows/rust.yml/badge.svg)](https://github.com/vcoppe/cbs/actions?query=workflow%3A%22Rust%22)
 [![codecov](https://codecov.io/gh/vcoppe/cbs/graph/badge.svg?token=219FLVZLS6)](https://codecov.io/gh/vcoppe/cbs)
-![GitHub](https://img.shields.io/github/license/vcoppe/cbs)
+[![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!WARNING]  
 > This library is still in its early development phase.
 
-A library implementing the *Continuous Conflict-Based Search* algorithm (CCBS) for the *Multi-Agent Path Finding* problem (MAPF), but **generic**, **parallel** and in **Rust**.
+CaBooSe (Conflict-Based Search), a library implementing the *Continuous Conflict-Based Search* algorithm (CCBS) for the *Multi-Agent Path Finding* problem (MAPF), but **generic**, **parallel** and in **Rust**.
 
 ![](resources/demo.gif)
 

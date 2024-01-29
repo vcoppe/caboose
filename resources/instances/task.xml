@@ -7,4 +7,5 @@
     <agent start_i="0" start_j="2" goal_i="0" goal_j="7"/>
     <agent start_i="0" start_j="7" goal_i="0" goal_j="2"/>
     <agent start_i="0" start_j="3" goal_i="0" goal_j="6"/>
+    <agent start_i="0" start_j="6" goal_i="0" goal_j="3"/>
 </root>
