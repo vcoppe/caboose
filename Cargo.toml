@@ -2,6 +2,13 @@
 name = "caboose"
 version = "0.0.0"
 edition = "2021"
+description = "A generic and parallel implementation of Continuous Conflict-Based Search algorithm for Multi-Agent Path Finding."
+repository = "https://github.com/vcoppe/caboose"
+readme = "README.md"
+license = "MIT"
+keywords = ["multi-agent-path-finding", "conflict-based-search", "planning", "robotics"]
+categories = ["algorithms", "science::robotics"]
+exclude = ["resources/*" ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
