@@ -139,7 +139,7 @@ pub fn parse_inputs(
         for node in map.nodes {
             let position = node
                 .position
-                .split(",")
+                .split(',')
                 .map(|n| n.parse().unwrap())
                 .collect::<Vec<f64>>();
             nodes.insert(node.id, graph.add_node((position[0], position[1])));

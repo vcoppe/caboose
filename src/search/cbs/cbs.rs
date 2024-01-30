@@ -291,13 +291,7 @@ where
                 self.shared.critical.lock().ongoing -= 1;
                 Some(node)
             }
-            _ => self
-                .shared
-                .critical
-                .lock()
-                .best
-                .as_ref()
-                .and_then(|b| Some(b.clone())),
+            _ => self.shared.critical.lock().best.as_ref().cloned(),
         }
     }
 
@@ -597,7 +591,7 @@ where
                     moves[0].to.clone(),
                     Interval::new(
                         moves[0].interval.start - config.precision,
-                        Self::earliest_non_colliding_time(shared, config, T2(&moves[0], &moves[1]))
+                        Self::earliest_non_colliding_time(shared, config, T2(moves[0], moves[1]))
                             + config.precision,
                     ),
                 )
@@ -608,7 +602,7 @@ where
                     moves[1].agent,
                     moves[1].from.clone(),
                     moves[1].to.clone(),
-                    moves[1].action.clone(),
+                    moves[1].action,
                     Interval::new(
                         moves[1].interval.start,
                         moves[1].interval.start + (moves[0].interval.end - moves[0].interval.start),
@@ -618,7 +612,7 @@ where
                     - (Self::earliest_non_colliding_time(
                         shared,
                         config,
-                        T2(&moves[0], &shortened_move),
+                        T2(moves[0], &shortened_move),
                     ) + config.precision)
             } else {
                 moves[1].interval.end - first_constraint.interval.end

@@ -104,9 +104,9 @@ where
             ))
         } else {
             // Solve the task with landmarks
-            self.to_first_landmark(config);
-            self.between_landmarks(config);
-            self.to_goal(config);
+            self.plan_to_first_landmark(config);
+            self.plan_between_landmarks(config);
+            self.plan_to_goal(config);
             self.get_solution(config)
         };
 
@@ -121,7 +121,7 @@ where
     }
 
     // Go from the initial state to the first landmark
-    fn to_first_landmark(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
+    fn plan_to_first_landmark(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
         let task = Arc::new(Task::new(
             config.task.initial_state.clone(),
             config.landmarks[0].state.clone(),
@@ -147,7 +147,7 @@ where
     }
 
     // Connect all landmarks sequentially
-    fn between_landmarks(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
+    fn plan_between_landmarks(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
         for (i, landmark) in config.landmarks.iter().enumerate().skip(1) {
             let task = Arc::new(Task::new(
                 config.landmarks[i - 1].state.clone(),
@@ -174,7 +174,7 @@ where
     }
 
     // Go from the last landmark to the goal state
-    fn to_goal(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
+    fn plan_to_goal(&mut self, config: &LSippConfig<TS, S, A, C, DC, H>) {
         let task = Arc::new(Task::new(
             config.landmarks[config.landmarks.len() - 1].state.clone(),
             config.task.goal_state.clone(),
@@ -216,8 +216,11 @@ where
             return None;
         }
 
-        let mut solution = Solution::default();
-        solution.cost = self.solutions[0].cost;
+        let mut solution = Solution {
+            cost: self.solutions[0].cost,
+            steps: vec![],
+            actions: vec![],
+        };
 
         let mut current_part = self.solutions.swap_remove(0);
         for landmark in (0..(config.landmarks.len() + 1)).rev() {
