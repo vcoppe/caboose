@@ -23,7 +23,7 @@ The original C++ implementation of CCBS is available at [PathPlanning/Continuous
 
 ## Features
 
-Some improvements described in [1] have been implemented.
+Some improvements described in this paper[^2] have been implemented.
 - [x] Disjoint splitting
 - [x] Prioritizing conflicts
 - [ ] High-level heuristics
