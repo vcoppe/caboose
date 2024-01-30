@@ -31,10 +31,10 @@ pub fn solve(map_file: &str, task_file: &str, config_file: &str, n_agents: usize
 }
 
 #[test]
-fn den520d_random_den520d_random_1_10() {
+fn den520d_random_den520d_random_1_9() {
     assert!(
-        (solve("den520d_random", "den520d-random-1.xml", "config-2.xml", 10).0 - 1968.0).abs()
-            / 1968.0
+        (solve("den520d_random", "den520d-random-1.xml", "config-2.xml", 9).0 - 1754.0).abs()
+            / 1754.0
             < 1e-2
     );
 }
@@ -74,115 +74,108 @@ fn den520d_random_den520d_random_12_10() {
 }
 
 #[test]
-fn den520d_random_den520d_random_13_17() {
+fn den520d_random_den520d_random_13_15() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-13.xml",
             "config-2.xml",
-            17
+            15
         )
-        .0 - 2660.0)
+        .0 - 2369.0)
             .abs()
-            / 2660.0
+            / 2369.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_14_25() {
+fn den520d_random_den520d_random_14_22() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-14.xml",
             "config-2.xml",
-            25
+            22
         )
-        .0 - 3577.13)
+        .0 - 3167.13)
             .abs()
-            / 3577.13
+            / 3167.13
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_15_16() {
+fn den520d_random_den520d_random_15_14() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-15.xml",
             "config-2.xml",
-            16
+            14
         )
-        .0 - 3163.0)
+        .0 - 2589.0)
             .abs()
-            / 3163.0
+            / 2589.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_16_19() {
+fn den520d_random_den520d_random_16_10() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-16.xml",
             "config-2.xml",
-            19
+            10
         )
-        .0 - 3355.0)
+        .0 - 1802.0)
             .abs()
-            / 3355.0
+            / 1802.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_17_8() {
+fn den520d_random_den520d_random_17_5() {
     assert!(
-        (solve("den520d_random", "den520d-random-17.xml", "config-2.xml", 8).0 - 1853.0).abs()
-            / 1853.0
+        (solve("den520d_random", "den520d-random-17.xml", "config-2.xml", 5).0 - 1023.0).abs()
+            / 1023.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_18_11() {
+fn den520d_random_den520d_random_18_8() {
     assert!(
-        (solve(
-            "den520d_random",
-            "den520d-random-18.xml",
-            "config-2.xml",
-            11
-        )
-        .0 - 2080.0)
-            .abs()
-            / 2080.0
+        (solve("den520d_random", "den520d-random-18.xml", "config-2.xml", 8).0 - 1491.0).abs()
+            / 1491.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_19_12() {
+fn den520d_random_den520d_random_19_11() {
     assert!(
         (solve(
             "den520d_random",
             "den520d-random-19.xml",
             "config-2.xml",
-            12
+            11
         )
-        .0 - 1887.0)
+        .0 - 1733.0)
             .abs()
-            / 1887.0
+            / 1733.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_2_18() {
+fn den520d_random_den520d_random_2_14() {
     assert!(
-        (solve("den520d_random", "den520d-random-2.xml", "config-2.xml", 18).0 - 3048.0).abs()
-            / 3048.0
+        (solve("den520d_random", "den520d-random-2.xml", "config-2.xml", 14).0 - 2329.0).abs()
+            / 2329.0
             < 1e-2
     );
 }
@@ -272,19 +265,19 @@ fn den520d_random_den520d_random_3_5() {
 }
 
 #[test]
-fn den520d_random_den520d_random_4_10() {
+fn den520d_random_den520d_random_4_4() {
     assert!(
-        (solve("den520d_random", "den520d-random-4.xml", "config-2.xml", 10).0 - 1768.0).abs()
-            / 1768.0
+        (solve("den520d_random", "den520d-random-4.xml", "config-2.xml", 4).0 - 851.0).abs()
+            / 851.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_5_18() {
+fn den520d_random_den520d_random_5_14() {
     assert!(
-        (solve("den520d_random", "den520d-random-5.xml", "config-2.xml", 18).0 - 2781.0).abs()
-            / 2781.0
+        (solve("den520d_random", "den520d-random-5.xml", "config-2.xml", 14).0 - 2276.0).abs()
+            / 2276.0
             < 1e-2
     );
 }
@@ -299,36 +292,36 @@ fn den520d_random_den520d_random_6_3() {
 }
 
 #[test]
-fn den520d_random_den520d_random_7_11() {
+fn den520d_random_den520d_random_7_5() {
     assert!(
-        (solve("den520d_random", "den520d-random-7.xml", "config-2.xml", 11).0 - 2235.0).abs()
-            / 2235.0
+        (solve("den520d_random", "den520d-random-7.xml", "config-2.xml", 5).0 - 827.0).abs()
+            / 827.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_8_16() {
+fn den520d_random_den520d_random_8_9() {
     assert!(
-        (solve("den520d_random", "den520d-random-8.xml", "config-2.xml", 16).0 - 2025.0).abs()
-            / 2025.0
+        (solve("den520d_random", "den520d-random-8.xml", "config-2.xml", 9).0 - 1056.0).abs()
+            / 1056.0
             < 1e-2
     );
 }
 
 #[test]
-fn den520d_random_den520d_random_9_17() {
+fn den520d_random_den520d_random_9_14() {
     assert!(
-        (solve("den520d_random", "den520d-random-9.xml", "config-2.xml", 17).0 - 2718.0).abs()
-            / 2718.0
+        (solve("den520d_random", "den520d-random-9.xml", "config-2.xml", 14).0 - 2133.0).abs()
+            / 2133.0
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_dense_10_task_18() {
+fn roadmaps_dense_10_task_16() {
     assert!(
-        (solve("roadmaps/dense", "10_task.xml", "config-2.xml", 18).0 - 2779.72).abs() / 2779.72
+        (solve("roadmaps/dense", "10_task.xml", "config-2.xml", 16).0 - 2562.67).abs() / 2562.67
             < 1e-2
     );
 }
@@ -342,9 +335,9 @@ fn roadmaps_dense_11_task_9() {
 }
 
 #[test]
-fn roadmaps_dense_12_task_27() {
+fn roadmaps_dense_12_task_19() {
     assert!(
-        (solve("roadmaps/dense", "12_task.xml", "config-2.xml", 27).0 - 3678.73).abs() / 3678.73
+        (solve("roadmaps/dense", "12_task.xml", "config-2.xml", 19).0 - 2675.34).abs() / 2675.34
             < 1e-2
     );
 }
@@ -358,9 +351,9 @@ fn roadmaps_dense_13_task_14() {
 }
 
 #[test]
-fn roadmaps_dense_14_task_14() {
+fn roadmaps_dense_14_task_10() {
     assert!(
-        (solve("roadmaps/dense", "14_task.xml", "config-2.xml", 14).0 - 1801.29).abs() / 1801.29
+        (solve("roadmaps/dense", "14_task.xml", "config-2.xml", 10).0 - 1326.93).abs() / 1326.93
             < 1e-2
     );
 }
@@ -382,17 +375,17 @@ fn roadmaps_dense_16_task_16() {
 }
 
 #[test]
-fn roadmaps_dense_17_task_12() {
+fn roadmaps_dense_17_task_10() {
     assert!(
-        (solve("roadmaps/dense", "17_task.xml", "config-2.xml", 12).0 - 1318.56).abs() / 1318.56
+        (solve("roadmaps/dense", "17_task.xml", "config-2.xml", 10).0 - 1122.02).abs() / 1122.02
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_dense_18_task_19() {
+fn roadmaps_dense_18_task_15() {
     assert!(
-        (solve("roadmaps/dense", "18_task.xml", "config-2.xml", 19).0 - 2666.9).abs() / 2666.9
+        (solve("roadmaps/dense", "18_task.xml", "config-2.xml", 15).0 - 2144.63).abs() / 2144.63
             < 1e-2
     );
 }
@@ -414,17 +407,17 @@ fn roadmaps_dense_1_task_11() {
 }
 
 #[test]
-fn roadmaps_dense_20_task_12() {
+fn roadmaps_dense_20_task_11() {
     assert!(
-        (solve("roadmaps/dense", "20_task.xml", "config-2.xml", 12).0 - 2069.09).abs() / 2069.09
+        (solve("roadmaps/dense", "20_task.xml", "config-2.xml", 11).0 - 1962.32).abs() / 1962.32
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_dense_21_task_4() {
+fn roadmaps_dense_21_task_3() {
     assert!(
-        (solve("roadmaps/dense", "21_task.xml", "config-2.xml", 4).0 - 662.874).abs() / 662.874
+        (solve("roadmaps/dense", "21_task.xml", "config-2.xml", 3).0 - 492.74).abs() / 492.74
             < 1e-2
     );
 }
@@ -438,33 +431,33 @@ fn roadmaps_dense_22_task_16() {
 }
 
 #[test]
-fn roadmaps_dense_23_task_11() {
+fn roadmaps_dense_23_task_8() {
     assert!(
-        (solve("roadmaps/dense", "23_task.xml", "config-2.xml", 11).0 - 1612.42).abs() / 1612.42
+        (solve("roadmaps/dense", "23_task.xml", "config-2.xml", 8).0 - 1116.13).abs() / 1116.13
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_dense_24_task_7() {
+fn roadmaps_dense_24_task_5() {
     assert!(
-        (solve("roadmaps/dense", "24_task.xml", "config-2.xml", 7).0 - 961.577).abs() / 961.577
+        (solve("roadmaps/dense", "24_task.xml", "config-2.xml", 5).0 - 700.113).abs() / 700.113
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_dense_25_task_12() {
+fn roadmaps_dense_25_task_10() {
     assert!(
-        (solve("roadmaps/dense", "25_task.xml", "config-2.xml", 12).0 - 2237.71).abs() / 2237.71
+        (solve("roadmaps/dense", "25_task.xml", "config-2.xml", 10).0 - 1819.37).abs() / 1819.37
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_dense_2_task_15() {
+fn roadmaps_dense_2_task_13() {
     assert!(
-        (solve("roadmaps/dense", "2_task.xml", "config-2.xml", 15).0 - 2396.3).abs() / 2396.3
+        (solve("roadmaps/dense", "2_task.xml", "config-2.xml", 13).0 - 2277.92).abs() / 2277.92
             < 1e-2
     );
 }
@@ -486,9 +479,9 @@ fn roadmaps_dense_4_task_14() {
 }
 
 #[test]
-fn roadmaps_dense_5_task_16() {
+fn roadmaps_dense_5_task_14() {
     assert!(
-        (solve("roadmaps/dense", "5_task.xml", "config-2.xml", 16).0 - 1902.6).abs() / 1902.6
+        (solve("roadmaps/dense", "5_task.xml", "config-2.xml", 14).0 - 1589.31).abs() / 1589.31
             < 1e-2
     );
 }
@@ -502,9 +495,9 @@ fn roadmaps_dense_6_task_10() {
 }
 
 #[test]
-fn roadmaps_dense_7_task_6() {
+fn roadmaps_dense_7_task_4() {
     assert!(
-        (solve("roadmaps/dense", "7_task.xml", "config-2.xml", 6).0 - 1021.26).abs() / 1021.26
+        (solve("roadmaps/dense", "7_task.xml", "config-2.xml", 4).0 - 611.161).abs() / 611.161
             < 1e-2
     );
 }
@@ -589,17 +582,17 @@ fn empty_16_16_random_empty_16_16_random_12_6() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_13_11() {
+fn empty_16_16_random_empty_16_16_random_13_7() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-13.xml",
             "config-2.xml",
-            11
+            7
         )
-        .0 - 136.0)
+        .0 - 102.0)
             .abs()
-            / 136.0
+            / 102.0
             < 1e-2
     );
 }
@@ -637,33 +630,33 @@ fn empty_16_16_random_empty_16_16_random_15_13() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_16_16() {
+fn empty_16_16_random_empty_16_16_random_16_11() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-16.xml",
             "config-2.xml",
-            16
+            11
         )
-        .0 - 124.131)
+        .0 - 88.1314)
             .abs()
-            / 124.131
+            / 88.1314
             < 1e-2
     );
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_17_11() {
+fn empty_16_16_random_empty_16_16_random_17_8() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-17.xml",
             "config-2.xml",
-            11
+            8
         )
-        .0 - 113.131)
+        .0 - 75.1314)
             .abs()
-            / 113.131
+            / 75.1314
             < 1e-2
     );
 }
@@ -797,33 +790,33 @@ fn empty_16_16_random_empty_16_16_random_24_17() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_25_12() {
+fn empty_16_16_random_empty_16_16_random_25_11() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-25.xml",
             "config-2.xml",
-            12
+            11
         )
-        .0 - 140.131)
+        .0 - 130.131)
             .abs()
-            / 140.131
+            / 130.131
             < 1e-2
     );
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_3_12() {
+fn empty_16_16_random_empty_16_16_random_3_10() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-3.xml",
             "config-2.xml",
-            12
+            10
         )
-        .0 - 168.131)
+        .0 - 141.0)
             .abs()
-            / 168.131
+            / 141.0
             < 1e-2
     );
 }
@@ -909,25 +902,25 @@ fn empty_16_16_random_empty_16_16_random_8_11() {
 }
 
 #[test]
-fn empty_16_16_random_empty_16_16_random_9_22() {
+fn empty_16_16_random_empty_16_16_random_9_15() {
     assert!(
         (solve(
             "empty-16-16-random",
             "empty-16-16-random-9.xml",
             "config-2.xml",
-            22
+            15
         )
-        .0 - 242.131)
+        .0 - 158.131)
             .abs()
-            / 242.131
+            / 158.131
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_sparse_10_task_12() {
+fn roadmaps_sparse_10_task_11() {
     assert!(
-        (solve("roadmaps/sparse", "10_task.xml", "config-2.xml", 12).0 - 2070.29).abs() / 2070.29
+        (solve("roadmaps/sparse", "10_task.xml", "config-2.xml", 11).0 - 1913.41).abs() / 1913.41
             < 1e-2
     );
 }
@@ -981,41 +974,41 @@ fn roadmaps_sparse_16_task_15() {
 }
 
 #[test]
-fn roadmaps_sparse_17_task_18() {
+fn roadmaps_sparse_17_task_17() {
     assert!(
-        (solve("roadmaps/sparse", "17_task.xml", "config-2.xml", 18).0 - 4496.39).abs() / 4496.39
+        (solve("roadmaps/sparse", "17_task.xml", "config-2.xml", 17).0 - 4175.64).abs() / 4175.64
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_sparse_18_task_10() {
+fn roadmaps_sparse_18_task_7() {
     assert!(
-        (solve("roadmaps/sparse", "18_task.xml", "config-2.xml", 10).0 - 1813.37).abs() / 1813.37
+        (solve("roadmaps/sparse", "18_task.xml", "config-2.xml", 7).0 - 1416.24).abs() / 1416.24
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_sparse_19_task_16() {
+fn roadmaps_sparse_19_task_14() {
     assert!(
-        (solve("roadmaps/sparse", "19_task.xml", "config-2.xml", 16).0 - 3470.83).abs() / 3470.83
+        (solve("roadmaps/sparse", "19_task.xml", "config-2.xml", 14).0 - 2971.03).abs() / 2971.03
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_sparse_1_task_15() {
+fn roadmaps_sparse_1_task_12() {
     assert!(
-        (solve("roadmaps/sparse", "1_task.xml", "config-2.xml", 15).0 - 2894.82).abs() / 2894.82
+        (solve("roadmaps/sparse", "1_task.xml", "config-2.xml", 12).0 - 2071.6).abs() / 2071.6
             < 1e-2
     );
 }
 
 #[test]
-fn roadmaps_sparse_20_task_11() {
+fn roadmaps_sparse_20_task_4() {
     assert!(
-        (solve("roadmaps/sparse", "20_task.xml", "config-2.xml", 11).0 - 2245.16).abs() / 2245.16
+        (solve("roadmaps/sparse", "20_task.xml", "config-2.xml", 4).0 - 1251.01).abs() / 1251.01
             < 1e-2
     );
 }
@@ -1037,9 +1030,9 @@ fn roadmaps_sparse_22_task_9() {
 }
 
 #[test]
-fn roadmaps_sparse_23_task_14() {
+fn roadmaps_sparse_23_task_13() {
     assert!(
-        (solve("roadmaps/sparse", "23_task.xml", "config-2.xml", 14).0 - 3632.12).abs() / 3632.12
+        (solve("roadmaps/sparse", "23_task.xml", "config-2.xml", 13).0 - 3459.67).abs() / 3459.67
             < 1e-2
     );
 }
@@ -1061,9 +1054,9 @@ fn roadmaps_sparse_25_task_8() {
 }
 
 #[test]
-fn roadmaps_sparse_2_task_13() {
+fn roadmaps_sparse_2_task_11() {
     assert!(
-        (solve("roadmaps/sparse", "2_task.xml", "config-2.xml", 13).0 - 2590.56).abs() / 2590.56
+        (solve("roadmaps/sparse", "2_task.xml", "config-2.xml", 11).0 - 2003.75).abs() / 2003.75
             < 1e-2
     );
 }
@@ -1196,10 +1189,10 @@ fn roadmaps_super_dense_17_task_6() {
 }
 
 #[test]
-fn roadmaps_super_dense_18_task_7() {
+fn roadmaps_super_dense_18_task_2() {
     assert!(
-        (solve("roadmaps/super-dense", "18_task.xml", "config-2.xml", 7).0 - 555.845).abs()
-            / 555.845
+        (solve("roadmaps/super-dense", "18_task.xml", "config-2.xml", 2).0 - 127.458).abs()
+            / 127.458
             < 1e-2
     );
 }
@@ -1223,10 +1216,10 @@ fn roadmaps_super_dense_1_task_2() {
 }
 
 #[test]
-fn roadmaps_super_dense_21_task_4() {
+fn roadmaps_super_dense_21_task_3() {
     assert!(
-        (solve("roadmaps/super-dense", "21_task.xml", "config-2.xml", 4).0 - 510.796).abs()
-            / 510.796
+        (solve("roadmaps/super-dense", "21_task.xml", "config-2.xml", 3).0 - 368.855).abs()
+            / 368.855
             < 1e-2
     );
 }
@@ -1268,10 +1261,10 @@ fn roadmaps_super_dense_25_task_9() {
 }
 
 #[test]
-fn roadmaps_super_dense_2_task_7() {
+fn roadmaps_super_dense_2_task_2() {
     assert!(
-        (solve("roadmaps/super-dense", "2_task.xml", "config-2.xml", 7).0 - 1014.07).abs()
-            / 1014.07
+        (solve("roadmaps/super-dense", "2_task.xml", "config-2.xml", 2).0 - 120.464).abs()
+            / 120.464
             < 1e-2
     );
 }
@@ -1295,9 +1288,10 @@ fn roadmaps_super_dense_4_task_7() {
 }
 
 #[test]
-fn roadmaps_super_dense_5_task_12() {
+fn roadmaps_super_dense_5_task_10() {
     assert!(
-        (solve("roadmaps/super-dense", "5_task.xml", "config-2.xml", 12).0 - 1544.4).abs() / 1544.4
+        (solve("roadmaps/super-dense", "5_task.xml", "config-2.xml", 10).0 - 1247.99).abs()
+            / 1247.99
             < 1e-2
     );
 }
@@ -1386,17 +1380,17 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_11_25() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_12_28() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_12_15() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-12.xml",
             "config-2.xml",
-            28
+            15
         )
-        .0 - 2810.0)
+        .0 - 1438.0)
             .abs()
-            / 2810.0
+            / 1438.0
             < 1e-2
     );
 }
@@ -1434,33 +1428,33 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_14_10() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_15_20() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_15_19() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-15.xml",
             "config-2.xml",
-            20
+            19
         )
-        .0 - 1775.0)
+        .0 - 1659.0)
             .abs()
-            / 1775.0
+            / 1659.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_16_35() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_16_33() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-16.xml",
             "config-2.xml",
-            35
+            33
         )
-        .0 - 3424.0)
+        .0 - 3314.0)
             .abs()
-            / 3424.0
+            / 3314.0
             < 1e-2
     );
 }
@@ -1482,81 +1476,81 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_17_9() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_18_29() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_18_17() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-18.xml",
             "config-2.xml",
-            29
+            17
         )
-        .0 - 2667.13)
+        .0 - 1564.0)
             .abs()
-            / 2667.13
+            / 1564.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_19_50() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_19_29() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-19.xml",
             "config-2.xml",
-            50
+            29
         )
-        .0 - 4645.0)
+        .0 - 2747.0)
             .abs()
-            / 4645.0
+            / 2747.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_2_36() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_2_21() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-2.xml",
             "config-2.xml",
-            36
+            21
         )
-        .0 - 3365.13)
+        .0 - 2232.0)
             .abs()
-            / 3365.13
+            / 2232.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_20_33() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_20_28() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-20.xml",
             "config-2.xml",
-            33
+            28
         )
-        .0 - 3389.0)
+        .0 - 2930.0)
             .abs()
-            / 3389.0
+            / 2930.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_21_20() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_21_16() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-21.xml",
             "config-2.xml",
-            20
+            16
         )
-        .0 - 2133.0)
+        .0 - 1602.0)
             .abs()
-            / 2133.0
+            / 1602.0
             < 1e-2
     );
 }
@@ -1578,17 +1572,17 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_22_29() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_23_11() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_23_6() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-23.xml",
             "config-2.xml",
-            11
+            6
         )
-        .0 - 1139.0)
+        .0 - 535.0)
             .abs()
-            / 1139.0
+            / 535.0
             < 1e-2
     );
 }
@@ -1642,33 +1636,33 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_3_10() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_4_29() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_4_19() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-4.xml",
             "config-2.xml",
-            29
+            19
         )
-        .0 - 2871.0)
+        .0 - 1827.0)
             .abs()
-            / 2871.0
+            / 1827.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_5_25() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_5_22() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-5.xml",
             "config-2.xml",
-            25
+            22
         )
-        .0 - 2879.0)
+        .0 - 2562.0)
             .abs()
-            / 2879.0
+            / 2562.0
             < 1e-2
     );
 }
@@ -1690,49 +1684,49 @@ fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_6_20() {
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_7_33() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_7_23() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-7.xml",
             "config-2.xml",
-            33
+            23
         )
-        .0 - 3044.0)
+        .0 - 2036.0)
             .abs()
-            / 3044.0
+            / 2036.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_8_19() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_8_18() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-8.xml",
             "config-2.xml",
-            19
+            18
         )
-        .0 - 1706.0)
+        .0 - 1578.0)
             .abs()
-            / 1706.0
+            / 1578.0
             < 1e-2
     );
 }
 
 #[test]
-fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_9_21() {
+fn warehouse_10_20_10_2_2_random_warehouse_10_20_10_2_2_random_9_17() {
     assert!(
         (solve(
             "warehouse-10-20-10-2-2_random",
             "warehouse-10-20-10-2-2-random-9.xml",
             "config-2.xml",
-            21
+            17
         )
-        .0 - 2188.0)
+        .0 - 1715.0)
             .abs()
-            / 2188.0
+            / 1715.0
             < 1e-2
     );
 }
