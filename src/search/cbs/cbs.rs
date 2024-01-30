@@ -75,7 +75,6 @@ where
     DC: Debug
         + Hash
         + Ord
-        + Add<DC, Output = DC>
         + Sub<DC, Output = DC>
         + Div<f64, Output = DC>
         + Copy
@@ -109,7 +108,6 @@ where
     DC: Debug
         + Hash
         + Ord
-        + Add<DC, Output = DC>
         + Sub<DC, Output = DC>
         + Div<f64, Output = DC>
         + Copy
@@ -447,24 +445,6 @@ where
             }
         };
 
-        // Filter out constraints with a length smaller than the precision
-        let constraints = T2(
-            constraints.0.and_then(|c| {
-                if c.interval.length() <= config.precision + config.precision {
-                    None
-                } else {
-                    Some(c)
-                }
-            }),
-            constraints.1.and_then(|c| {
-                if c.interval.length() <= config.precision + config.precision {
-                    None
-                } else {
-                    Some(c)
-                }
-            }),
-        );
-
         // Get a minimal clone of the current node to allow retrieving the constraints in the successor nodes
         // without needing to store the current node in an Arc
         let minimal_clone = Arc::new(node.get_minimal_clone());
@@ -754,6 +734,15 @@ where
                 } else {
                     C::max_value()
                 };
+            }
+
+            // Ignore moves with no duration
+            if intervals[0].start == intervals[0].end {
+                index[0] += 1;
+                continue;
+            } else if intervals[1].start == intervals[1].end {
+                index[1] += 1;
+                continue;
             }
 
             // Check if the intervals overlap
