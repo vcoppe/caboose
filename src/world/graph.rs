@@ -9,14 +9,18 @@ pub struct GraphEdgeId(pub usize);
 /// Definition of a directed graph node.
 #[derive(Debug)]
 pub struct GraphNode<NodeData> {
+    /// The data associated with the node.
     pub data: NodeData,
 }
 
 /// Definition of a directed graph edge.
 #[derive(Debug)]
 pub struct GraphEdge<EdgeData> {
+    /// The node the edge goes from.
     pub from: GraphNodeId,
+    /// The node the edge goes to.
     pub to: GraphNodeId,
+    /// The data associated with the edge.
     pub data: EdgeData,
 }
 

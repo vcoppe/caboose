@@ -9,12 +9,17 @@ use ordered_float::OrderedFloat;
 use tuple::A2;
 
 use crate::{
-    Graph, GraphEdgeId, GraphNodeId, Heuristic, LimitValues, MinimalHeuristic, Move, State, Task,
+    Graph, GraphEdgeId, GraphNodeId, Heuristic, HeuristicBuilder, LimitValues, Move, State, Task,
     TransitionSystem,
 };
 
+/// A wrapper around f64 that implements Ord and LimitValues.
 pub type MyTime = OrderedFloat<f64>;
+
+/// The (x,y) coordinates of a node in the graph.
 pub type SimpleNodeData = (f64, f64);
+
+/// The distance between two nodes in the graph.
 pub type SimpleEdgeData = f64;
 
 /// A world simply described by a directed weighted graph
@@ -24,6 +29,12 @@ pub struct SimpleWorld {
 }
 
 impl SimpleWorld {
+    /// Creates a new simple world.
+    ///
+    /// # Arguments
+    ///
+    /// * `graph` - The graph representing the world.
+    /// * `agent_size` - The radius of the agents.
     pub fn new(graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>, agent_size: f64) -> Self {
         SimpleWorld {
             graph,
@@ -31,7 +42,7 @@ impl SimpleWorld {
         }
     }
 
-    pub fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> MyTime {
+    fn time_between(&self, from: GraphNodeId, to: GraphNodeId) -> MyTime {
         let from = self.graph.get_node(from);
         let to = self.graph.get_node(to);
         let dx = to.data.0 - from.data.0;
@@ -39,12 +50,12 @@ impl SimpleWorld {
         (dx * dx + dy * dy).sqrt().into()
     }
 
-    pub fn time(&self, edge: GraphEdgeId) -> MyTime {
+    fn time(&self, edge: GraphEdgeId) -> MyTime {
         let edge = self.graph.get_edge(edge);
         self.time_between(edge.from, edge.to)
     }
 
-    pub fn get_center_and_vel(
+    fn get_center_and_vel(
         &self,
         m: &Move<SimpleState, GraphEdgeId, MyTime, MyTime>,
         initial_time: &MyTime,
@@ -69,6 +80,7 @@ impl SimpleWorld {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+/// A state in the simple world, simply represented by a GraphNodeId.
 pub struct SimpleState(pub GraphNodeId);
 
 impl State for SimpleState {
@@ -121,12 +133,19 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld 
     }
 }
 
+/// A heuristic that returns the time to connect two vertices of the graph in straight line.
 pub struct SimpleHeuristic {
     transition_system: Arc<SimpleWorld>,
     goal_state: SimpleState,
 }
 
 impl SimpleHeuristic {
+    /// Creates a new simple heuristic.
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agent navigates.
+    /// * `task` - The task to solve.
     pub fn new(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState, MyTime>>) -> Self {
         SimpleHeuristic {
             transition_system,
@@ -144,7 +163,7 @@ impl Heuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for Simple
     }
 }
 
-impl MinimalHeuristic<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleHeuristic {
+impl HeuristicBuilder<SimpleWorld, SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleHeuristic {
     fn build(transition_system: Arc<SimpleWorld>, task: Arc<Task<SimpleState, MyTime>>) -> Self {
         Self::new(transition_system, task)
     }
@@ -160,6 +179,33 @@ impl LimitValues for MyTime {
     }
 }
 
+pub fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
+    let mut graph = Graph::new();
+    for x in 0..size {
+        for y in 0..size {
+            graph.add_node((x as f64, y as f64));
+        }
+    }
+    for x in 0..size {
+        for y in 0..size {
+            let node_id = GraphNodeId(x + y * size);
+            if x > 0 {
+                graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
+            }
+            if y > 0 {
+                graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
+            }
+            if x < size - 1 {
+                graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
+            }
+            if y < size - 1 {
+                graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
+            }
+        }
+    }
+    Arc::new(graph)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -168,36 +214,9 @@ mod tests {
     use tuple::T2;
 
     use crate::{
-        Graph, GraphEdgeId, GraphNodeId, Interval, Move, SimpleEdgeData, SimpleNodeData,
-        SimpleState, SimpleWorld, TransitionSystem,
+        simple_graph, GraphEdgeId, GraphNodeId, Interval, Move, SimpleState, SimpleWorld,
+        TransitionSystem,
     };
-
-    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-        let mut graph = Graph::new();
-        for x in 0..size {
-            for y in 0..size {
-                graph.add_node((x as f64, y as f64));
-            }
-        }
-        for x in 0..size {
-            for y in 0..size {
-                let node_id = GraphNodeId(x + y * size);
-                if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
-                }
-                if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
-                }
-                if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
-                }
-                if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
-                }
-            }
-        }
-        Arc::new(graph)
-    }
 
     #[test]
     fn test_simple() {

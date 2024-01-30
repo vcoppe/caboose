@@ -18,16 +18,25 @@ pub trait TransitionSystem<S, A, C, DC>
 where
     C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
+    /// Returns the actions that can be applied from the given state.
     fn actions_from(&self, state: &S) -> slice::Iter<A>;
 
+    /// Returns the state resulting from applying the given action to the given state.
     fn transition(&self, state: &S, action: &A) -> S;
+
+    /// Returns the cost of applying the given action to the given state (i.e. the duration of the action).
     fn transition_cost(&self, state: &S, action: &A) -> DC;
 
+    /// Returns the actions that can be applied to reach the given state.
     fn reverse_actions_from(&self, state: &S) -> slice::Iter<A>;
 
+    /// Returns the state resulting from applying the given reverse action to the given state.
     fn reverse_transition(&self, state: &S, action: &A) -> S;
+
+    /// Returns the cost of applying the given reverse action to the given state (i.e. the duration of the action).
     fn reverse_transition_cost(&self, state: &S, action: &A) -> DC;
 
+    /// Returns true if agents can wait at the given state.
     fn can_wait_at(&self, state: &S) -> bool;
 
     /// Returns true if the two moves lead to a collision.
@@ -52,8 +61,11 @@ where
     S: State + Eq + Clone,
     C: Copy,
 {
+    /// The initial state of the agent.
     pub initial_state: S,
+    /// The goal state that the agent must reach.
     pub goal_state: S,
+    /// The initial cost of the agent.
     pub initial_cost: C,
 }
 
@@ -62,6 +74,13 @@ where
     S: State + Eq + Clone,
     C: Copy,
 {
+    /// Creates a new task.
+    ///
+    /// # Arguments
+    ///
+    /// * `initial_state` - The initial state of the agent.
+    /// * `goal_state` - The goal state that the agent must reach.
+    /// * `initial_cost` - The initial cost of the agent.
     pub fn new(initial_state: S, goal_state: S, initial_cost: C) -> Self {
         Self {
             initial_state,
@@ -70,10 +89,12 @@ where
         }
     }
 
+    /// Returns true if the given state is a goal state for the task.
     pub fn is_goal_state(&self, state: &S) -> bool {
         state.is_equivalent(&self.goal_state)
     }
 
+    /// Returns the reverse task.
     pub fn reverse(&self) -> Self {
         Self {
             initial_state: self.goal_state.clone(),
@@ -89,10 +110,15 @@ pub struct Move<S, A, C, DC>
 where
     C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
+    /// The agent that performs the move.
     pub agent: usize,
+    /// The state the agent moves from.
     pub from: S,
+    /// The state the agent moves to.
     pub to: S,
+    /// The action the agent performs, or None if the agent waits.
     pub action: Option<A>,
+    /// The interval during which the agent performs the action.
     pub interval: Interval<C, DC>,
 }
 
@@ -100,6 +126,15 @@ impl<S, A, C, DC> Move<S, A, C, DC>
 where
     C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
+    /// Creates a new move.
+    ///
+    /// # Arguments
+    ///
+    /// * `agent` - The agent that performs the move.
+    /// * `from` - The state the agent moves from.
+    /// * `to` - The state the agent moves to.
+    /// * `action` - The action the agent performs, or None if the agent waits.
+    /// * `interval` - The interval during which the agent performs the action.
     pub fn new(agent: usize, from: S, to: S, action: Option<A>, interval: Interval<C, DC>) -> Self {
         Self {
             agent,

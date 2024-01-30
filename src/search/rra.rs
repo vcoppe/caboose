@@ -16,13 +16,15 @@ use std::{
 use fxhash::{FxHashMap, FxHashSet};
 use parking_lot::Mutex;
 
-use crate::{abstraction::TransitionSystem, Heuristic, Task};
-use crate::{LimitValues, SearchNode, State};
+use crate::{Heuristic, LimitValues, State, Task, TransitionSystem};
+
+use super::SearchNode;
 
 /// Implementation of the Reverse Resumable A* algorithm
 /// that computes the shortest path between:
 /// - any state of a given transition system, and
 /// - the goal state of a given task in this transition system.
+///
 /// The shortest paths are computed on demand by the heuristic requests.
 pub struct ReverseResumableAStar<TS, S, A, C, DC, H>
 where
@@ -82,6 +84,13 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// Creates a new instance of the RRA* algorithm
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agents navigate.
+    /// * `task` - The task to solve.
+    /// * `heuristic` - The heuristic to use to guide the search.
     pub fn new(transition_system: Arc<TS>, task: Arc<Task<S, C>>, heuristic: H) -> Self
     where
         Self: Sized,
@@ -191,7 +200,7 @@ where
 }
 
 /// Protected data used by the Reverse Resumable A* algorithm.
-pub struct RraData<S, C, DC>
+struct RraData<S, C, DC>
 where
     C: Copy + Ord + Add<DC, Output = C>,
     DC: Copy,
@@ -220,8 +229,11 @@ where
 /// Statistics of the Reverse Resumable A* algorithm.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RraStats {
+    /// The number of new queries.
     pub new_query: usize,
+    /// The number of cached queries (for which the heuristic value has already been computed).
     pub cached_query: usize,
+    /// The number of expanded search nodes.
     pub expanded: usize,
 }
 
@@ -242,36 +254,9 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, Heuristic, ReverseResumableAStar, RraStats, SimpleEdgeData,
-        SimpleHeuristic, SimpleNodeData, SimpleState, SimpleWorld, Task,
+        simple_graph, GraphNodeId, Heuristic, ReverseResumableAStar, RraStats, SimpleHeuristic,
+        SimpleState, SimpleWorld, Task,
     };
-
-    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-        let mut graph = Graph::new();
-        for x in 0..size {
-            for y in 0..size {
-                graph.add_node((x as f64, y as f64));
-            }
-        }
-        for x in 0..size {
-            for y in 0..size {
-                let node_id = GraphNodeId(x + y * size);
-                if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
-                }
-                if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
-                }
-                if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
-                }
-                if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
-                }
-            }
-        }
-        Arc::new(graph)
-    }
 
     #[test]
     fn test_simple() {

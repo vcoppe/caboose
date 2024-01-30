@@ -5,8 +5,8 @@ use quick_xml::{de::from_str, DeError};
 use serde::Deserialize;
 
 use crate::{
-    CbsConfig, ConflictBasedSearch, Graph, GraphEdgeId, GraphNodeId, MyTime, ReverseResumableAStar,
-    SimpleEdgeData, SimpleHeuristic, SimpleNodeData, SimpleState, SimpleWorld, Task,
+    CbsConfig, ConflictBasedSearch, Graph, GraphEdgeId, GraphNodeId, MyTime, SimpleEdgeData,
+    SimpleHeuristic, SimpleNodeData, SimpleState, SimpleWorld, Task,
 };
 
 /// Builds a CBS algorithm and its configuration from the given files.
@@ -25,27 +25,12 @@ pub fn get_cbs_from_files(
     let (graph, tasks, config) = parse_inputs(map_file, task_file, config_file, n_agents).unwrap();
     let transition_system = Arc::new(SimpleWorld::new(graph.clone(), config.agent_size));
 
-    let pivots = Arc::new(tasks.iter().map(|t| t.goal_state.clone()).collect());
-    let heuristic_to_pivots = Arc::new(
-        tasks
-            .iter()
-            .map(|t| {
-                Arc::new(ReverseResumableAStar::new(
-                    transition_system.clone(),
-                    t.clone(),
-                    SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
-                ))
-            })
-            .collect(),
-    );
-
     (
         graph,
-        ConflictBasedSearch::new(transition_system),
+        ConflictBasedSearch::new(transition_system.clone()),
         CbsConfig::new(
+            transition_system,
             tasks,
-            pivots,
-            heuristic_to_pivots,
             OrderedFloat(config.precision),
             n_threads,
             Some(Duration::from_secs_f64(config.time_limit)),
@@ -54,7 +39,7 @@ pub fn get_cbs_from_files(
     )
 }
 
-/// Parse the benchmark maps and scenarios from https://movingai.com/benchmarks/mapf/index.html
+/// Parse the benchmark maps and scenarios from <https://movingai.com/benchmarks/mapf/index.html>
 pub fn read_from_file(filename: &str) -> Result<String, Box<dyn Error>> {
     let mut file = File::open(filename)?;
     let mut contents = String::new();
@@ -62,7 +47,7 @@ pub fn read_from_file(filename: &str) -> Result<String, Box<dyn Error>> {
     Ok(contents)
 }
 
-/// Parse the benchmark maps and scenarios from https://movingai.com/benchmarks/mapf/index.html
+/// Parse the benchmark maps and scenarios from <https://movingai.com/benchmarks/mapf/index.html>
 pub fn parse_inputs(
     map_file: &str,
     task_file: &str,
@@ -205,27 +190,27 @@ pub fn parse_inputs(
 /// </graphml>
 /// ```
 #[derive(Debug, Deserialize)]
-pub struct Map {
+struct Map {
     #[serde(rename = "map")]
     grid: Option<GridMap>,
     graph: Option<GraphMap>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GridMap {
+struct GridMap {
     width: usize,
     height: usize,
     grid: Grid,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Grid {
+struct Grid {
     #[serde(rename = "row")]
     rows: Vec<Vec<usize>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GraphMap {
+struct GraphMap {
     #[serde(rename = "node")]
     nodes: Vec<Node>,
     #[serde(rename = "edge")]
@@ -233,7 +218,7 @@ pub struct GraphMap {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Node {
+struct Node {
     #[serde(rename = "@id")]
     id: String,
     #[serde(rename = "data")]
@@ -241,7 +226,7 @@ pub struct Node {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Edge {
+struct Edge {
     #[serde(rename = "@source")]
     source: String,
     #[serde(rename = "@target")]
@@ -267,13 +252,13 @@ pub struct Edge {
 /// </root>
 /// ```
 #[derive(Debug, Deserialize)]
-pub struct Scenario {
+struct Scenario {
     #[serde(rename = "agent")]
     pub agents: Vec<Agent>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Agent {
+struct Agent {
     #[serde(rename = "@start_i")]
     pub start_i: Option<usize>,
     #[serde(rename = "@start_j")]
@@ -314,16 +299,21 @@ pub fn parse_config(filename: &str) -> Result<Config, Box<dyn Error>> {
 /// ```
 /// We only use the `agent_size`, `connectedness` and `precision` parameters.
 #[derive(Debug, Deserialize)]
-pub struct ConfigRoot {
+struct ConfigRoot {
     #[serde(rename = "algorithm")]
     pub config: Config,
 }
 
+/// An algorithm configuration to use to solve benchmark instances.
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    /// The radius of the agents.
     pub agent_size: f64,
+    /// The number of neighbors to consider for grid maps.
     pub connectedness: usize,
+    /// The precision to use when computing collisions and constraints.
     pub precision: f64,
     #[serde(rename = "timelimit")]
+    /// The time limit for the algorithm.
     pub time_limit: f64,
 }

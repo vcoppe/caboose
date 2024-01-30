@@ -15,8 +15,8 @@ use std::{
 use fxhash::{FxHashMap, FxHashSet};
 
 use crate::{
-    Action, ConstraintSet, Heuristic, Interval, LimitValues, SearchNode, Solution, State, Task,
-    TransitionSystem,
+    search::{ConstraintSet, SearchNode},
+    Action, Heuristic, Interval, LimitValues, Solution, State, Task, TransitionSystem,
 };
 
 /// Implementation of the Safe Interval Path Planning algorithm that computes
@@ -73,6 +73,10 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agents navigate.
     pub fn new(transition_system: Arc<TS>) -> Self {
         SafeIntervalPathPlanning {
             transition_system,
@@ -131,6 +135,10 @@ where
     }
 
     /// Attempts to solve the given configuration, and returns the optimal solution if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration describing the task to solve.
     pub fn solve(
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
@@ -494,10 +502,15 @@ where
     DC: PartialEq + Eq + PartialOrd + Ord + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// The task to solve.
     task: Arc<Task<S, C>>,
+    /// The interval during which the task must be completed.
     interval: Interval<C, DC>,
+    /// The constraints that the solution must satisfy.
     constraints: Arc<ConstraintSet<S, C, DC>>,
+    /// The heuristic to use to guide the search.
     heuristic: Arc<H>,
+    /// The precision to use to compute collisions.
     precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
 }
@@ -518,6 +531,15 @@ where
     DC: PartialEq + Eq + PartialOrd + Ord + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// Creates a new configuration for the SIPP algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to solve.
+    /// * `interval` - The interval during which the task must be completed.
+    /// * `constraints` - The constraints that the solution must satisfy.
+    /// * `heuristic` - The heuristic to use to guide the search.
+    /// * `precision` - The precision to use to compute collisions.
     pub fn new(
         task: Arc<Task<S, C>>,
         interval: Interval<C, DC>,
@@ -553,9 +575,13 @@ where
     DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// The task to solve, with potentially multiple initial and goal states.
     task: SippTask<S, C, DC>,
+    /// The constraints that the solution must satisfy.
     constraints: Arc<ConstraintSet<S, C, DC>>,
+    /// The heuristic to use to guide the search.
     heuristic: Arc<H>,
+    /// The precision to use to compute collisions.
     precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
 }
@@ -576,6 +602,15 @@ where
     DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// Creates a new configuration for the SIPP algorithm that supports
+    /// multiple initial and goal states.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to solve, with potentially multiple initial and goal states.
+    /// * `constraints` - The constraints that the solution must satisfy.
+    /// * `heuristic` - The heuristic to use to guide the search.
+    /// * `precision` - The precision to use to compute collisions.
     pub fn new(
         task: SippTask<S, C, DC>,
         constraints: Arc<ConstraintSet<S, C, DC>>,
@@ -600,7 +635,9 @@ where
     S: Debug + Eq,
     C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
+    /// The safe interval of the state.
     pub safe_interval: Interval<C, DC>,
+    /// The internal state of the agent.
     pub internal_state: S,
 }
 
@@ -619,10 +656,15 @@ where
         + LimitValues,
     DC: Copy,
 {
+    /// The initial times of the task.
     initial_times: Vec<C>,
+    /// The initial states of the task.
     initial_states: Vec<Arc<SippState<S, C, DC>>>,
+    /// The goal state of the task.
     goal_state: S,
+    /// The interval in which the goal state must be reached.
     goal_interval: Interval<C, DC>,
+    /// The internal task to solve.
     internal_task: Arc<Task<S, C>>,
     _phantom: PhantomData<DC>,
 }
@@ -640,6 +682,16 @@ where
         + LimitValues,
     DC: Copy,
 {
+    /// Creates a new task for the SIPP algorithm, that
+    /// supports multiple initial and goal states.
+    ///
+    /// # Arguments
+    ///
+    /// * `initial_times` - The initial times of the task.
+    /// * `initial_states` - The initial states of the task.
+    /// * `goal_state` - The goal state of the task.
+    /// * `goal_interval` - The interval in which the goal state must be reached.
+    /// * `internal_task` - The internal task to solve.
     pub fn new(
         initial_times: Vec<C>,
         initial_states: Vec<Arc<SippState<S, C, DC>>>,
@@ -657,6 +709,7 @@ where
         }
     }
 
+    /// Checks if the given search node has reached to the goal state.
     fn is_goal(&self, state: &SearchNode<SippState<S, C, DC>, C, DC>) -> bool {
         self.internal_task
             .is_goal_state(&state.state.internal_state)
@@ -666,7 +719,9 @@ where
 /// Statistics of the Safe Interval Path Planning algorithm.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SippStats {
+    /// The number of searches performed.
     pub searches: usize,
+    /// The number of search nodes expanded.
     pub expanded: usize,
 }
 
@@ -684,39 +739,12 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        search::sipp::sipp::SippConfig, Constraint, ConstraintSet, Graph, GraphEdgeId, GraphNodeId,
-        Interval, MyTime, ReverseResumableAStar, SimpleEdgeData, SimpleHeuristic, SimpleNodeData,
-        SimpleState, SimpleWorld, Task,
+        search::{Constraint, ConstraintSet},
+        simple_graph, GraphEdgeId, GraphNodeId, Interval, MyTime, ReverseResumableAStar,
+        SimpleHeuristic, SimpleState, SimpleWorld, SippConfig, Task,
     };
 
     use super::SafeIntervalPathPlanning;
-
-    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-        let mut graph = Graph::new();
-        for x in 0..size {
-            for y in 0..size {
-                graph.add_node((x as f64, y as f64));
-            }
-        }
-        for x in 0..size {
-            for y in 0..size {
-                let node_id = GraphNodeId(x + y * size);
-                if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
-                }
-                if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
-                }
-                if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
-                }
-                if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
-                }
-            }
-        }
-        Arc::new(graph)
-    }
 
     #[test]
     fn test_simple() {

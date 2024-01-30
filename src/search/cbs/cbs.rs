@@ -15,9 +15,10 @@ use parking_lot::{Condvar, Mutex};
 use tuple::{A2, T2};
 
 use crate::{
-    Conflict, ConflictType, Constraint, ConstraintSet, ConstraintType, Heuristic, Interval,
-    LSippConfig, LSippStats, LandmarkSet, LimitValues, Move, ReverseResumableAStar, RraStats,
-    SafeIntervalPathPlanningWithLandmarks, SippState, Solution, State, Task, TransitionSystem,
+    search::{Conflict, ConflictType, Constraint, ConstraintSet, ConstraintType, LandmarkSet},
+    Heuristic, HeuristicBuilder, Interval, LSippConfig, LSippStats, LimitValues, Move,
+    ReverseResumableAStar, RraStats, SafeIntervalPathPlanningWithLandmarks, SippState, Solution,
+    State, Task, TransitionSystem,
 };
 
 struct Critical<S, A, C, DC>
@@ -52,7 +53,7 @@ where
     monitor: Condvar,
 }
 
-/// Implementation of the Conflict-Based Search algorithm.
+/// Implementation of the Conflict-Based Search algorithm that plans collision-free paths for a set of agents.
 pub struct ConflictBasedSearch<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC> + Send + Sync,
@@ -117,6 +118,11 @@ where
         + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
+    /// Creates a new instance of the Conflict-Based Search algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agents navigate.
     pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
             shared: Shared {
@@ -218,6 +224,11 @@ where
         }
     }
 
+    /// Applies the Conflict-Based Search algorithm to the given configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - A configuration describing the problem to solve.
     pub fn solve(
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
@@ -260,6 +271,7 @@ where
         });
 
         let mut critical = self.shared.critical.lock();
+        critical.queue.clear();
         critical.stats.elapsed = start.elapsed();
         critical.stats.rra_stats = config
             .heuristic_to_pivots
@@ -272,27 +284,6 @@ where
                 .map(|sol| (*sol).clone())
                 .collect()
         })
-    }
-
-    pub fn solve_iter(
-        &mut self,
-        config: &CbsConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Arc<CbsNode<S, A, C, DC>>> {
-        let mut lsipp =
-            SafeIntervalPathPlanningWithLandmarks::new(self.shared.transition_system.clone());
-
-        if self.shared.critical.lock().stats.expanded == 0 {
-            Self::init(&self.shared, config, &mut lsipp)
-        }
-
-        match Self::get_workload(&self.shared) {
-            WorkLoad::WorkItem { node } => {
-                Self::branch_on(&self.shared, config, node.clone(), &mut lsipp);
-                self.shared.critical.lock().ongoing -= 1;
-                Some(node)
-            }
-            _ => self.shared.critical.lock().best.as_ref().cloned(),
-        }
     }
 
     fn get_workload(shared: &Shared<TS, S, A, C, DC>) -> WorkLoad<S, A, C, DC> {
@@ -896,15 +887,21 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// The number of agents to consider.
     pub n_agents: usize,
+    /// The task that each agent needs to perform.
     pub tasks: Vec<Arc<Task<S, C>>>,
+    /// A set of frozen agents and their already planned paths.
     frozen: FxHashMap<usize, Solution<Arc<SippState<S, C, DC>>, A, C, DC>>,
     /// A set of pivot states.
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
+    /// The precision to use when computing collisions and constraints.
     precision: DC,
+    /// The number of threads to use.
     n_threads: usize,
+    /// The time limit for the search.
     pub time_limit: Option<Duration>,
     _phantom: PhantomData<(TS, A)>,
 }
@@ -924,7 +921,62 @@ where
     DC: Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// Creates a new configuration for the Conflict-Based Search algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agents navigate
+    /// * `tasks` - The task that each agent needs to perform
+    /// * `precision` - The precision to use when computing collisions and constraints
+    /// * `n_threads` - The number of threads to use
+    /// * `time_limit` - The time limit for the search
     pub fn new(
+        transition_system: Arc<TS>,
+        tasks: Vec<Arc<Task<S, C>>>,
+        precision: DC,
+        n_threads: usize,
+        time_limit: Option<Duration>,
+    ) -> Self
+    where
+        H: HeuristicBuilder<TS, S, A, C, DC>,
+    {
+        let pivots = Arc::new(tasks.iter().map(|t| t.goal_state.clone()).collect());
+        let heuristic_to_pivots = Arc::new(
+            tasks
+                .iter()
+                .map(|t| {
+                    Arc::new(ReverseResumableAStar::new(
+                        transition_system.clone(),
+                        t.clone(),
+                        H::build(transition_system.clone(), Arc::new(t.reverse())),
+                    ))
+                })
+                .collect(),
+        );
+        Self {
+            n_agents: tasks.len(),
+            tasks,
+            frozen: FxHashMap::default(),
+            pivots,
+            heuristic_to_pivots,
+            precision,
+            n_threads,
+            time_limit,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Creates a new configuration for the Conflict-Based Search algorithm.
+    ///
+    /// # Arguments
+    ///
+    /// * `tasks` - The task that each agent needs to perform
+    /// * `pivots` - A set of pivot states for which heuristics have been initialized
+    /// * `heuristic_to_pivots` - A set of heuristics to the pivot states
+    /// * `precision` - The precision to use when computing collisions and constraints
+    /// * `n_threads` - The number of threads to use
+    /// * `time_limit` - The time limit for the search
+    pub fn new_with_pivots(
         tasks: Vec<Arc<Task<S, C>>>,
         pivots: Arc<Vec<S>>,
         heuristic_to_pivots: Arc<Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>>,
@@ -945,6 +997,12 @@ where
         }
     }
 
+    /// Adds a frozen agent and its already planned path to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `agent` - The new frozen agent
+    /// * `solution` - The already planned path for the agent
     pub fn add_frozen(
         &mut self,
         agent: usize,
@@ -956,7 +1014,7 @@ where
 
 /// A node in the Conflict-Based Search tree.
 #[derive(Debug)]
-pub struct CbsNode<S, A, C, DC>
+struct CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
     C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
@@ -1238,9 +1296,13 @@ where
 /// Statistics of the Conflict-Based Search algorithm.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CbsStats {
+    /// The number of CBS nodes expanded.
     pub expanded: usize,
+    /// The time elapsed during the search.
     pub elapsed: Duration,
+    /// Statistics of the low-level search algorithm.
     pub lsipp_stats: LSippStats,
+    /// Statistics of the RRA* algorithm used as a heuristic.
     pub rra_stats: RraStats,
 }
 
@@ -1251,38 +1313,10 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphNodeId, ReverseResumableAStar, SimpleEdgeData, SimpleHeuristic, SimpleNodeData,
-        SimpleState, SimpleWorld, Task,
+        simple_graph, GraphEdgeId, GraphNodeId, SimpleHeuristic, SimpleState, SimpleWorld, Task,
     };
 
     use super::{CbsConfig, ConflictBasedSearch};
-
-    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-        let mut graph = Graph::new();
-        for x in 0..size {
-            for y in 0..size {
-                graph.add_node((x as f64, y as f64));
-            }
-        }
-        for x in 0..size {
-            for y in 0..size {
-                let node_id = GraphNodeId(x + y * size);
-                if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
-                }
-                if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
-                }
-                if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
-                }
-                if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
-                }
-            }
-        }
-        Arc::new(graph)
-    }
 
     #[test]
     fn test_simple() {
@@ -1303,24 +1337,16 @@ mod tests {
             )),
         ];
 
-        let pivots = Arc::new(tasks.iter().map(|t| t.goal_state.clone()).collect());
-        let heuristic_to_pivots = Arc::new(
-            tasks
-                .iter()
-                .map(|t| {
-                    Arc::new(ReverseResumableAStar::new(
-                        transition_system.clone(),
-                        t.clone(),
-                        SimpleHeuristic::new(transition_system.clone(), Arc::new(t.reverse())),
-                    ))
-                })
-                .collect(),
-        );
-
-        let config = CbsConfig::new(
+        let config: CbsConfig<
+            SimpleWorld,
+            SimpleState,
+            GraphEdgeId,
+            OrderedFloat<f64>,
+            OrderedFloat<f64>,
+            SimpleHeuristic,
+        > = CbsConfig::new(
+            transition_system.clone(),
             tasks,
-            pivots,
-            heuristic_to_pivots,
             OrderedFloat(1e-6),
             1,
             None,
@@ -1351,17 +1377,16 @@ mod tests {
             OrderedFloat(0.0),
         ))];
 
-        let mut pivots = vec![tasks[0].goal_state.clone()];
-        let mut heuristic_to_pivots = vec![Arc::new(ReverseResumableAStar::new(
+        let config: CbsConfig<
+            SimpleWorld,
+            SimpleState,
+            GraphEdgeId,
+            OrderedFloat<f64>,
+            OrderedFloat<f64>,
+            SimpleHeuristic,
+        > = CbsConfig::new(
             transition_system.clone(),
-            tasks[0].clone(),
-            SimpleHeuristic::new(transition_system.clone(), Arc::new(tasks[0].reverse())),
-        ))];
-
-        let config = CbsConfig::new(
             tasks.clone(),
-            Arc::new(pivots.clone()),
-            Arc::new(heuristic_to_pivots.clone()),
             OrderedFloat(1e-6),
             1,
             None,
@@ -1378,17 +1403,10 @@ mod tests {
             SimpleState(GraphNodeId(0)),
             OrderedFloat(0.0),
         )));
-        pivots.push(tasks[1].goal_state.clone());
-        heuristic_to_pivots.push(Arc::new(ReverseResumableAStar::new(
-            transition_system.clone(),
-            tasks[1].clone(),
-            SimpleHeuristic::new(transition_system.clone(), Arc::new(tasks[1].reverse())),
-        )));
 
         let mut config = CbsConfig::new(
+            transition_system.clone(),
             tasks,
-            Arc::new(pivots.clone()),
-            Arc::new(heuristic_to_pivots),
             OrderedFloat(1e-6),
             1,
             None,

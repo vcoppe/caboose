@@ -9,9 +9,10 @@ use std::{
 use fxhash::FxHashMap;
 
 use crate::{
-    ConstraintSet, DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, LandmarkSet,
-    LimitValues, SafeIntervalPathPlanning, SippConfig, SippState, SippStats, SippTask, Solution,
-    State, Task, TransitionSystem,
+    search::{ConstraintSet, LandmarkSet},
+    DifferentialHeuristic, GeneralizedSippConfig, Heuristic, Interval, LimitValues,
+    SafeIntervalPathPlanning, SippConfig, SippState, SippStats, SippTask, Solution, State, Task,
+    TransitionSystem,
 };
 
 /// Implementation of Safe Interval Path Planning algorithm that supports landmarks
@@ -66,6 +67,10 @@ where
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm with landmarks.
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agents navigate.
     pub fn new(transition_system: Arc<TS>) -> Self {
         Self {
             sipp: SafeIntervalPathPlanning::new(transition_system),
@@ -87,6 +92,10 @@ where
     }
 
     /// Attempts to solve the given configuration, and returns the solution if any.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration describing the task to solve.
     pub fn solve(
         &mut self,
         config: &LSippConfig<TS, S, A, C, DC, H>,
@@ -286,13 +295,17 @@ where
     DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// The task to solve.
     task: Arc<Task<S, C>>,
+    /// The constraints that the solution must satisfy.
     constraints: Arc<ConstraintSet<S, C, DC>>,
+    /// The landmarks to visit before aiming for the goal state.
     landmarks: LandmarkSet<S, C, DC>,
     /// A set of pivot states.
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
     heuristic_to_pivots: Arc<Vec<Arc<H>>>,
+    /// The precision to use to compute collisions.
     precision: DC,
     _phantom: PhantomData<(TS, A)>,
 }
@@ -313,6 +326,15 @@ where
     DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
+    /// Creates a new configuration for the SIPP algorithm that supports landmarks.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to solve.
+    /// * `constraints` - The constraints that the solution must satisfy.
+    /// * `landmarks` - The landmarks to visit before aiming for the goal state.
+    /// * `heuristic` - The heuristic to use to guide the search.
+    /// * `precision` - The precision to use to compute collisions.
     pub fn new(
         task: Arc<Task<S, C>>,
         constraints: Arc<ConstraintSet<S, C, DC>>,
@@ -331,6 +353,16 @@ where
         }
     }
 
+    /// Creates a new configuration for the SIPP algorithm that supports landmarks.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to solve.
+    /// * `constraints` - The constraints that the solution must satisfy.
+    /// * `landmarks` - The landmarks to visit before aiming for the goal state.
+    /// * `pivots` - The pivot states associated to the heuristics.
+    /// * `heuristic_to_pivots` - The heuristics to use to compute the differential heuristic.
+    /// * `precision` - The precision to use to compute collisions.
     pub fn new_with_pivots(
         task: Arc<Task<S, C>>,
         constraints: Arc<ConstraintSet<S, C, DC>>,
@@ -354,7 +386,9 @@ where
 /// Statistics of the Safe Interval Path Planning algorithm with landmarks.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LSippStats {
+    /// The number of searches performed.
     pub searches: usize,
+    /// The statistics of the SIPP algorithm used under the hood.
     pub sipp_stats: SippStats,
 }
 
@@ -372,37 +406,10 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Constraint, Graph, GraphNodeId, Interval, LSippConfig, ReverseResumableAStar,
-        SafeIntervalPathPlanningWithLandmarks, SimpleEdgeData, SimpleHeuristic, SimpleNodeData,
-        SimpleState, SimpleWorld, Task,
+        search::Constraint, simple_graph, GraphNodeId, Interval, LSippConfig,
+        ReverseResumableAStar, SafeIntervalPathPlanningWithLandmarks, SimpleHeuristic, SimpleState,
+        SimpleWorld, Task,
     };
-
-    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-        let mut graph = Graph::new();
-        for x in 0..size {
-            for y in 0..size {
-                graph.add_node((x as f64, y as f64));
-            }
-        }
-        for x in 0..size {
-            for y in 0..size {
-                let node_id = GraphNodeId(x + y * size);
-                if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
-                }
-                if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
-                }
-                if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
-                }
-                if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
-                }
-            }
-        }
-        Arc::new(graph)
-    }
 
     #[test]
     fn test_simple() {

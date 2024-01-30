@@ -8,12 +8,13 @@ use std::{
 use fxhash::FxHashMap;
 
 use crate::{
-    CbsConfig, ConflictBasedSearch, Heuristic, Interval, LimitValues, MinimalHeuristic,
+    CbsConfig, ConflictBasedSearch, Heuristic, HeuristicBuilder, Interval, LimitValues,
     ReverseResumableAStar, SippState, Solution, State, Task, TransitionSystem,
 };
 
-/// A lifelong planner that uses Conflict-Based Search under the hood.
-pub struct Planner<TS, S, A, C, DC, H>
+/// A lifelong planner that supports requests for new tasks while other tasks are being executed.
+/// It uses Conflict-Based Search under the hood.
+pub struct Lifelong<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC> + Send + Sync,
     S: Debug + State + Eq + Hash + Clone + Send + Sync,
@@ -41,7 +42,7 @@ where
         + Default
         + Send
         + Sync,
-    H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
+    H: Heuristic<TS, S, A, C, DC> + HeuristicBuilder<TS, S, A, C, DC> + Send + Sync,
 {
     transition_system: Arc<TS>,
     solver: ConflictBasedSearch<TS, S, A, C, DC, H>,
@@ -51,7 +52,7 @@ where
     collision_precision: DC,
 }
 
-impl<TS, S, A, C, DC, H> Planner<TS, S, A, C, DC, H>
+impl<TS, S, A, C, DC, H> Lifelong<TS, S, A, C, DC, H>
 where
     TS: TransitionSystem<S, A, C, DC> + Send + Sync,
     S: Debug + State + Eq + Hash + Clone + Send + Sync,
@@ -79,8 +80,16 @@ where
         + Default
         + Send
         + Sync,
-    H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
+    H: Heuristic<TS, S, A, C, DC> + HeuristicBuilder<TS, S, A, C, DC> + Send + Sync,
 {
+    /// Creates a new lifelong planner for the given transition system and initial states.
+    ///
+    /// # Arguments
+    ///
+    /// * `transition_system` - The transition system in which the agents navigate.
+    /// * `initial_states` - The initial states of the agents.
+    /// * `initial_cost` - The initial cost of the agents.
+    /// * `collision_precision` - The precision used to detect collisions.
     pub fn new(
         transition_system: Arc<TS>,
         initial_states: Vec<S>,
@@ -127,9 +136,13 @@ where
         }
     }
 
-    /// Plan optimal paths to complete the given tasks, while avoiding other currently
-    /// executing tasks.
-    pub fn plan(
+    /// Plan optimal paths to complete the given tasks,
+    /// while avoiding other currently executing tasks.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration of the planning request, specifying the new tasks to solve.
+    pub fn solve(
         &mut self,
         config: &LifelongConfig<S, C>,
     ) -> Option<&Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>> {
@@ -142,7 +155,7 @@ where
             ));
         }
 
-        let mut cbs_config = CbsConfig::new(
+        let mut cbs_config = CbsConfig::new_with_pivots(
             self.tasks.clone(),
             Arc::new(self.tasks.iter().map(|t| t.goal_state.clone()).collect()),
             Arc::new(self.heuristic_to_pivots.clone()),
@@ -172,8 +185,10 @@ where
     S: State + Eq + Clone,
     C: Copy,
 {
+    /// The tasks to solve.
     pub tasks: FxHashMap<usize, Arc<Task<S, C>>>, // TODO: only require new destination and use current position as initial state?
-    n_threads: usize,
+    /// The number of threads to use.
+    pub n_threads: usize,
 }
 
 #[cfg(test)]
@@ -184,36 +199,9 @@ mod tests {
     use ordered_float::OrderedFloat;
 
     use crate::{
-        Graph, GraphEdgeId, GraphNodeId, LifelongConfig, Planner, SimpleEdgeData, SimpleHeuristic,
-        SimpleNodeData, SimpleState, SimpleWorld, Task,
+        simple_graph, GraphEdgeId, GraphNodeId, Lifelong, LifelongConfig, SimpleHeuristic,
+        SimpleState, SimpleWorld, Task,
     };
-
-    fn simple_graph(size: usize) -> Arc<Graph<SimpleNodeData, SimpleEdgeData>> {
-        let mut graph = Graph::new();
-        for x in 0..size {
-            for y in 0..size {
-                graph.add_node((x as f64, y as f64));
-            }
-        }
-        for x in 0..size {
-            for y in 0..size {
-                let node_id = GraphNodeId(x + y * size);
-                if x > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x - 1 + y * size), 1.0);
-                }
-                if y > 0 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y - 1) * size), 1.0);
-                }
-                if x < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + 1 + y * size), 1.0);
-                }
-                if y < size - 1 {
-                    graph.add_edge(node_id, GraphNodeId(x + (y + 1) * size), 1.0);
-                }
-            }
-        }
-        Arc::new(graph)
-    }
 
     #[test]
     fn test_simple() {
@@ -227,14 +215,14 @@ mod tests {
             SimpleState(GraphNodeId(2)),
         ];
 
-        let mut planner: Planner<
+        let mut planner: Lifelong<
             SimpleWorld,
             SimpleState,
             GraphEdgeId,
             OrderedFloat<f64>,
             OrderedFloat<f64>,
             SimpleHeuristic,
-        > = Planner::new(
+        > = Lifelong::new(
             transition_system,
             initial_states,
             OrderedFloat(0.0),
@@ -263,7 +251,7 @@ mod tests {
             )),
         );
 
-        let solutions = planner.plan(&config).unwrap();
+        let solutions = planner.solve(&config).unwrap();
 
         assert_eq!(solutions[0].cost + solutions[2].cost, OrderedFloat(17.0));
         assert!(solutions[1].actions.is_empty());
