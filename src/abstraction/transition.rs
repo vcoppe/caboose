@@ -1,4 +1,4 @@
-use std::slice;
+use std::{ops::Sub, slice};
 
 use tuple::A2;
 
@@ -16,7 +16,7 @@ pub trait State {
 /// The reverse transitions must also be described to allow using the reverse search as a heuristic.
 pub trait TransitionSystem<S, A, C, DC>
 where
-    C: Ord + LimitValues,
+    C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
     fn actions_from(&self, state: &S) -> slice::Iter<A>;
 
@@ -31,7 +31,7 @@ where
     fn can_wait_at(&self, state: &S) -> bool;
 
     /// Returns true if the two moves lead to a collision.
-    fn conflict(&self, moves: A2<&Move<S, A, C>>) -> bool;
+    fn conflict(&self, moves: A2<&Move<S, A, C, DC>>) -> bool;
 }
 
 /// Definition of a callback that can be used to apply actions to a transition system.
@@ -85,22 +85,22 @@ where
 
 /// Definition of a move in a transition system.
 #[derive(Debug, Clone)]
-pub struct Move<S, A, C>
+pub struct Move<S, A, C, DC>
 where
-    C: Ord + LimitValues,
+    C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
     pub agent: usize,
     pub from: S,
     pub to: S,
     pub action: Option<A>,
-    pub interval: Interval<C>,
+    pub interval: Interval<C, DC>,
 }
 
-impl<S, A, C> Move<S, A, C>
+impl<S, A, C, DC> Move<S, A, C, DC>
 where
-    C: Ord + LimitValues,
+    C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
-    pub fn new(agent: usize, from: S, to: S, action: Option<A>, interval: Interval<C>) -> Self {
+    pub fn new(agent: usize, from: S, to: S, action: Option<A>, interval: Interval<C, DC>) -> Self {
         Self {
             agent,
             from,

@@ -61,7 +61,14 @@ pub trait Heuristic<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: Hash + Eq + Clone,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default + LimitValues,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
 {
     /// Returns the heuristic value for the given state,
     /// or None if the goal state is not reachable from that state.
@@ -73,7 +80,14 @@ pub trait MinimalHeuristic<TS, S, A, C, DC>
 where
     TS: TransitionSystem<S, A, C, DC>,
     S: State + Hash + Eq + Clone,
-    C: Eq + PartialOrd + Ord + Add<DC, Output = C> + Copy + Default + LimitValues,
+    C: Eq
+        + PartialOrd
+        + Ord
+        + Add<DC, Output = C>
+        + Sub<C, Output = DC>
+        + Copy
+        + Default
+        + LimitValues,
 {
     fn build(transition_system: Arc<TS>, task: Arc<Task<S, C>>) -> Self;
 }
@@ -215,20 +229,20 @@ pub enum ConflictType {
 #[derive(Debug)]
 pub struct Conflict<S, A, C, DC>
 where
-    C: Ord + LimitValues,
+    C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
     DC: Ord + Default,
 {
-    pub moves: A2<Move<S, A, C>>,
+    pub moves: A2<Move<S, A, C, DC>>,
     pub type_: ConflictType,
     pub overcost: DC,
 }
 
 impl<S, A, C, DC> Conflict<S, A, C, DC>
 where
-    C: Ord + LimitValues,
+    C: Ord + LimitValues + Sub<C, Output = DC> + Copy,
     DC: Ord + Default,
 {
-    pub fn new(moves: A2<Move<S, A, C>>) -> Self {
+    pub fn new(moves: A2<Move<S, A, C, DC>>) -> Self {
         Self {
             moves,
             type_: ConflictType::NonCardinal,
@@ -239,7 +253,7 @@ where
 
 impl<S, A, C, DC> PartialEq for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy + LimitValues,
+    C: Ord + Copy + LimitValues + Sub<C, Output = DC>,
     DC: Ord + Default,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -257,14 +271,14 @@ where
 
 impl<S, A, C, DC> Eq for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy + LimitValues,
+    C: Ord + Copy + LimitValues + Sub<C, Output = DC>,
     DC: Ord + Default,
 {
 }
 
 impl<S, A, C, DC> PartialOrd for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy + LimitValues,
+    C: Ord + Copy + LimitValues + Sub<C, Output = DC>,
     DC: Ord + Default,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -274,7 +288,7 @@ where
 
 impl<S, A, C, DC> Ord for Conflict<S, A, C, DC>
 where
-    C: Ord + Copy + LimitValues,
+    C: Ord + Copy + LimitValues + Sub<C, Output = DC>,
     DC: Ord + Default,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -306,26 +320,26 @@ pub trait LimitValues {
 
 /// Defines a time interval (start <= end).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Interval<C>
+pub struct Interval<C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
     pub start: C,
     pub end: C,
 }
 
-impl<C> Default for Interval<C>
+impl<C, DC> Default for Interval<C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
     fn default() -> Self {
         Self::new(C::min_value(), C::max_value())
     }
 }
 
-impl<C> Interval<C>
+impl<C, DC> Interval<C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
     pub fn new(start: C, end: C) -> Self {
         Self { start, end }
@@ -337,6 +351,10 @@ where
 
     pub fn contains(&self, other: &Self) -> bool {
         self.start <= other.start && other.end <= self.end
+    }
+
+    pub fn length(&self) -> DC {
+        self.end - self.start
     }
 }
 
@@ -351,22 +369,24 @@ pub enum ConstraintType {
 
 /// Defines a constraint that can be imposed on a given agent in a search algorithm.
 #[derive(Debug, Clone)]
-pub struct Constraint<S, C>
+pub struct Constraint<S, C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
+    DC: PartialEq + Eq + PartialOrd + Ord,
 {
     pub agent: usize,
     pub state: S,
     pub next: Option<S>,
-    pub interval: Interval<C>,
+    pub interval: Interval<C, DC>,
     pub type_: ConstraintType,
 }
 
-impl<S, C> Constraint<S, C>
+impl<S, C, DC> Constraint<S, C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
+    DC: PartialEq + Eq + PartialOrd + Ord,
 {
-    pub fn new_state_constraint(agent: usize, state: S, interval: Interval<C>) -> Self {
+    pub fn new_state_constraint(agent: usize, state: S, interval: Interval<C, DC>) -> Self {
         Self {
             agent,
             state,
@@ -375,7 +395,12 @@ where
             type_: ConstraintType::State,
         }
     }
-    pub fn new_action_constraint(agent: usize, state: S, next: S, interval: Interval<C>) -> Self {
+    pub fn new_action_constraint(
+        agent: usize,
+        state: S,
+        next: S,
+        interval: Interval<C, DC>,
+    ) -> Self {
         Self {
             agent,
             state,
@@ -386,29 +411,37 @@ where
     }
 }
 
-impl<S, C> PartialEq for Constraint<S, C>
+impl<S, C, DC> PartialEq for Constraint<S, C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
+    DC: PartialEq + Eq + PartialOrd + Ord,
 {
     fn eq(&self, other: &Self) -> bool {
         self.interval == other.interval
     }
 }
 
-impl<S, C> Eq for Constraint<S, C> where C: PartialEq + Eq + PartialOrd + Ord + LimitValues {}
-
-impl<S, C> PartialOrd for Constraint<S, C>
+impl<S, C, DC> Eq for Constraint<S, C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
+    DC: PartialEq + Eq + PartialOrd + Ord,
+{
+}
+
+impl<S, C, DC> PartialOrd for Constraint<S, C, DC>
+where
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
+    DC: PartialEq + Eq + PartialOrd + Ord,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<S, C> Ord for Constraint<S, C>
+impl<S, C, DC> Ord for Constraint<S, C, DC>
 where
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
+    DC: PartialEq + Eq + PartialOrd + Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.interval.cmp(&other.interval)
@@ -417,19 +450,21 @@ where
 
 /// Set of constraints that can be imposed on agents in a search algorithm.
 #[derive(Debug)]
-pub struct ConstraintSet<S, C>
+pub struct ConstraintSet<S, C, DC>
 where
     S: State + Eq + Hash + Clone,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy + Sub<C, Output = DC>,
+    DC: PartialEq + Eq + PartialOrd + Ord + Copy,
 {
-    pub state_constraints: FxHashMap<S, Vec<Constraint<S, C>>>,
-    pub action_constraints: FxHashMap<(S, S), Vec<Constraint<S, C>>>,
+    pub state_constraints: FxHashMap<S, Vec<Constraint<S, C, DC>>>,
+    pub action_constraints: FxHashMap<(S, S), Vec<Constraint<S, C, DC>>>,
 }
 
-impl<S, C> Default for ConstraintSet<S, C>
+impl<S, C, DC> Default for ConstraintSet<S, C, DC>
 where
     S: State + Eq + Hash + Clone,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy + Sub<C, Output = DC>,
+    DC: PartialEq + Eq + PartialOrd + Ord + Copy,
 {
     fn default() -> Self {
         Self {
@@ -439,12 +474,13 @@ where
     }
 }
 
-impl<S, C> ConstraintSet<S, C>
+impl<S, C, DC> ConstraintSet<S, C, DC>
 where
     S: State + Eq + Hash + Clone,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Copy + Sub<C, Output = DC>,
+    DC: PartialEq + Eq + PartialOrd + Ord + Copy,
 {
-    pub fn add(&mut self, constraint: &Arc<Constraint<S, C>>) {
+    pub fn add(&mut self, constraint: &Arc<Constraint<S, C, DC>>) {
         match constraint.type_ {
             ConstraintType::State => {
                 self.state_constraints
@@ -464,11 +500,11 @@ where
         }
     }
 
-    pub fn get_state_constraints(&self, state: &S) -> Option<&Vec<Constraint<S, C>>> {
+    pub fn get_state_constraints(&self, state: &S) -> Option<&Vec<Constraint<S, C, DC>>> {
         self.state_constraints.get(state)
     }
 
-    pub fn get_action_constraints(&self, from: &S, to: &S) -> Option<&Vec<Constraint<S, C>>> {
+    pub fn get_action_constraints(&self, from: &S, to: &S) -> Option<&Vec<Constraint<S, C, DC>>> {
         self.action_constraints.get(&(from.clone(), to.clone()))
     }
 
@@ -525,4 +561,4 @@ where
     }
 }
 
-pub type LandmarkSet<S, C> = Vec<Arc<Constraint<S, C>>>;
+pub type LandmarkSet<S, C, DC> = Vec<Arc<Constraint<S, C, DC>>>;

@@ -38,17 +38,17 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Debug + PartialOrd + Copy + Default,
+    DC: Debug + Hash + Copy + Default + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
     transition_system: Arc<TS>,
-    queue: BinaryHeap<Reverse<SearchNode<SippState<S, C>, C, DC>>>,
-    distance: FxHashMap<Arc<SippState<S, C>>, C>,
-    closed: FxHashSet<Arc<SippState<S, C>>>,
-    parent: FxHashMap<Arc<SippState<S, C>>, (Action<A, DC>, Arc<SippState<S, C>>)>,
-    goal_intervals: BTreeSet<Interval<C>>,
+    queue: BinaryHeap<Reverse<SearchNode<SippState<S, C, DC>, C, DC>>>,
+    distance: FxHashMap<Arc<SippState<S, C, DC>>, C>,
+    closed: FxHashSet<Arc<SippState<S, C, DC>>>,
+    parent: FxHashMap<Arc<SippState<S, C, DC>>, (Action<A, DC>, Arc<SippState<S, C, DC>>)>,
+    goal_intervals: BTreeSet<Interval<C, DC>>,
     goal_horizon: C,
-    safe_intervals: Vec<Interval<C>>,
+    safe_intervals: Vec<Interval<C, DC>>,
     stats: SippStats,
     _phantom: PhantomData<(A, H)>,
 }
@@ -69,7 +69,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Debug + PartialOrd + Copy + Default,
+    DC: Debug + Hash + Copy + Default + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm.
@@ -134,7 +134,7 @@ where
     pub fn solve(
         &mut self,
         config: &SippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    ) -> Option<Solution<Arc<SippState<S, C, DC>>, A, C, DC>> {
         self.to_generalized(config)
             .and_then(|config| self.solve_generalized(&config).pop())
     }
@@ -142,7 +142,7 @@ where
     pub fn solve_generalized(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-    ) -> Vec<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    ) -> Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>> {
         if !self.init(config) {
             return vec![];
         }
@@ -207,7 +207,7 @@ where
     fn find_paths(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-    ) -> Vec<SearchNode<SippState<S, C>, C, DC>> {
+    ) -> Vec<SearchNode<SippState<S, C, DC>, C, DC>> {
         let mut goals = vec![];
 
         while let Some(Reverse(current)) = self.queue.pop() {
@@ -246,7 +246,7 @@ where
     fn expand(
         &mut self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-        current: &SearchNode<SippState<S, C>, C, DC>,
+        current: &SearchNode<SippState<S, C, DC>, C, DC>,
     ) {
         for action in self
             .transition_system
@@ -398,11 +398,11 @@ where
     /// Computes the safe intervals for the given state, given a set of constraints,
     /// and that overlap with the given interval.
     fn get_safe_intervals(
-        constraints: &Arc<ConstraintSet<S, C>>,
+        constraints: &Arc<ConstraintSet<S, C, DC>>,
         state: &S,
-        range: &Interval<C>,
+        range: &Interval<C, DC>,
         precision: DC,
-        safe_intervals: &mut Vec<Interval<C>>,
+        safe_intervals: &mut Vec<Interval<C, DC>>,
     ) {
         if let Some(state_constraints) = constraints.get_state_constraints(state) {
             let mut current = Interval::default();
@@ -426,8 +426,8 @@ where
     fn get_solution(
         &self,
         config: &GeneralizedSippConfig<TS, S, A, C, DC, H>,
-        goal: &SearchNode<SippState<S, C>, C, DC>,
-    ) -> Solution<Arc<SippState<S, C>>, A, C, DC> {
+        goal: &SearchNode<SippState<S, C, DC>, C, DC>,
+    ) -> Solution<Arc<SippState<S, C, DC>>, A, C, DC> {
         let mut solution = Solution::default();
         let mut current = goal.state.clone();
 
@@ -491,11 +491,12 @@ where
         + Copy
         + Default
         + LimitValues,
+    DC: PartialEq + Eq + PartialOrd + Ord + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    interval: Interval<C>,
-    constraints: Arc<ConstraintSet<S, C>>,
+    interval: Interval<C, DC>,
+    constraints: Arc<ConstraintSet<S, C, DC>>,
     heuristic: Arc<H>,
     precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
@@ -514,12 +515,13 @@ where
         + Copy
         + Default
         + LimitValues,
+    DC: PartialEq + Eq + PartialOrd + Ord + Copy,
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
         task: Arc<Task<S, C>>,
-        interval: Interval<C>,
-        constraints: Arc<ConstraintSet<S, C>>,
+        interval: Interval<C, DC>,
+        constraints: Arc<ConstraintSet<S, C, DC>>,
         heuristic: Arc<H>,
         precision: DC,
     ) -> Self {
@@ -548,11 +550,11 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Copy,
+    DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: SippTask<S, C, DC>,
-    constraints: Arc<ConstraintSet<S, C>>,
+    constraints: Arc<ConstraintSet<S, C, DC>>,
     heuristic: Arc<H>,
     precision: DC,
     _phantom: PhantomData<(TS, S, A)>,
@@ -571,12 +573,12 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Copy,
+    DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
         task: SippTask<S, C, DC>,
-        constraints: Arc<ConstraintSet<S, C>>,
+        constraints: Arc<ConstraintSet<S, C, DC>>,
         heuristic: Arc<H>,
         precision: DC,
     ) -> Self {
@@ -593,12 +595,12 @@ where
 /// State wrapper for the Safe Interval Path Planning algorithm that extends
 /// a given state definition with a safe interval.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct SippState<S, C>
+pub struct SippState<S, C, DC>
 where
     S: Debug + Eq,
-    C: PartialEq + Eq + PartialOrd + Ord + LimitValues,
+    C: PartialEq + Eq + PartialOrd + Ord + LimitValues + Sub<C, Output = DC> + Copy,
 {
-    pub safe_interval: Interval<C>,
+    pub safe_interval: Interval<C, DC>,
     pub internal_state: S,
 }
 
@@ -618,9 +620,9 @@ where
     DC: Copy,
 {
     initial_times: Vec<C>,
-    initial_states: Vec<Arc<SippState<S, C>>>,
+    initial_states: Vec<Arc<SippState<S, C, DC>>>,
     goal_state: S,
-    goal_interval: Interval<C>,
+    goal_interval: Interval<C, DC>,
     internal_task: Arc<Task<S, C>>,
     _phantom: PhantomData<DC>,
 }
@@ -640,9 +642,9 @@ where
 {
     pub fn new(
         initial_times: Vec<C>,
-        initial_states: Vec<Arc<SippState<S, C>>>,
+        initial_states: Vec<Arc<SippState<S, C, DC>>>,
         goal_state: S,
-        goal_interval: Interval<C>,
+        goal_interval: Interval<C, DC>,
         internal_task: Arc<Task<S, C>>,
     ) -> Self {
         SippTask {
@@ -655,7 +657,7 @@ where
         }
     }
 
-    fn is_goal(&self, state: &SearchNode<SippState<S, C>, C, DC>) -> bool {
+    fn is_goal(&self, state: &SearchNode<SippState<S, C, DC>, C, DC>) -> bool {
         self.internal_task
             .is_goal_state(&state.state.internal_state)
     }

@@ -23,7 +23,7 @@ use crate::{
 struct Critical<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Default + Copy + Ord + LimitValues,
+    C: Debug + Default + Copy + Ord + LimitValues + Sub<C, Output = DC>,
     DC: Default + Copy + Ord,
 {
     queue: BinaryHeap<Reverse<Arc<CbsNode<S, A, C, DC>>>>,
@@ -71,7 +71,16 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug
+        + Hash
+        + Ord
+        + Add<DC, Output = DC>
+        + Sub<DC, Output = DC>
+        + Div<f64, Output = DC>
+        + Copy
+        + Default
+        + Send
+        + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
     shared: Shared<TS, S, A, C, DC>,
@@ -96,7 +105,16 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug
+        + Hash
+        + Ord
+        + Add<DC, Output = DC>
+        + Sub<DC, Output = DC>
+        + Div<f64, Output = DC>
+        + Copy
+        + Default
+        + Send
+        + Sync,
     H: Heuristic<TS, S, A, C, DC> + Send + Sync,
 {
     pub fn new(transition_system: Arc<TS>) -> Self {
@@ -203,7 +221,7 @@ where
     pub fn solve(
         &mut self,
         config: &CbsConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
+    ) -> Option<Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>> {
         let start = Instant::now();
         std::thread::scope(|s| {
             for i in 0..config.n_threads {
@@ -411,14 +429,14 @@ where
         >,
     ) -> (
         Vec<Option<CbsNode<S, A, C, DC>>>,
-        Vec<Option<Solution<Arc<SippState<S, C>>, A, C, DC>>>,
-        A2<Option<Arc<Constraint<S, C>>>>,
+        Vec<Option<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>>,
+        A2<Option<Arc<Constraint<S, C, DC>>>>,
     ) {
         // Get the agents involved in the conflict
         let agents = T2(conflict.moves.0.agent, conflict.moves.1.agent);
 
         // Check if the agents are already frozen
-        let frozen = T2(
+        let frozen: T2<bool, bool> = T2(
             config.frozen.contains_key(&agents[0]),
             config.frozen.contains_key(&agents[1]),
         );
@@ -443,6 +461,24 @@ where
                 T2(Some(Arc::new(constraints.0)), Some(Arc::new(constraints.1)))
             }
         };
+
+        // Filter out constraints with a length smaller than the precision
+        let constraints = T2(
+            constraints.0.and_then(|c| {
+                if c.interval.length() <= config.precision + config.precision {
+                    None
+                } else {
+                    Some(c)
+                }
+            }),
+            constraints.1.and_then(|c| {
+                if c.interval.length() <= config.precision + config.precision {
+                    None
+                } else {
+                    Some(c)
+                }
+            }),
+        );
 
         // Get a minimal clone of the current node to allow retrieving the constraints in the successor nodes
         // without needing to store the current node in an Arc
@@ -501,8 +537,8 @@ where
     fn get_constraints(
         shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
-        moves: &A2<Move<S, A, C>>,
-    ) -> A2<Constraint<S, C>> {
+        moves: &A2<Move<S, A, C, DC>>,
+    ) -> A2<Constraint<S, C, DC>> {
         if moves[0].action.is_none() && moves[1].action.is_none() {
             let interval = Interval::new(
                 moves[0].interval.start.max(moves[1].interval.start) - config.precision,
@@ -608,7 +644,7 @@ where
     fn earliest_non_colliding_time(
         shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
-        moves: A2<&Move<S, A, C>>,
+        moves: A2<&Move<S, A, C, DC>>,
     ) -> C {
         let mut lo = moves[0].interval.start;
         let mut hi = moves[1].interval.end; // Starting the move after the second agent has finished its move is always okay
@@ -708,7 +744,7 @@ where
         shared: &Shared<TS, S, A, C, DC>,
         config: &CbsConfig<TS, S, A, C, DC, H>,
         node: &CbsNode<S, A, C, DC>,
-        solutions: &[&Solution<Arc<SippState<S, C>>, A, C, DC>],
+        solutions: &[&Solution<Arc<SippState<S, C, DC>>, A, C, DC>],
         agents: A2<usize>,
         lsipp: &mut SafeIntervalPathPlanningWithLandmarks<
             TS,
@@ -868,7 +904,7 @@ where
 {
     pub n_agents: usize,
     pub tasks: Vec<Arc<Task<S, C>>>,
-    frozen: FxHashMap<usize, Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    frozen: FxHashMap<usize, Solution<Arc<SippState<S, C, DC>>, A, C, DC>>,
     /// A set of pivot states.
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
@@ -915,7 +951,11 @@ where
         }
     }
 
-    pub fn add_frozen(&mut self, agent: usize, solution: Solution<Arc<SippState<S, C>>, A, C, DC>) {
+    pub fn add_frozen(
+        &mut self,
+        agent: usize,
+        solution: Solution<Arc<SippState<S, C, DC>>, A, C, DC>,
+    ) {
         self.frozen.insert(agent, solution);
     }
 }
@@ -925,21 +965,21 @@ where
 pub struct CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     pub total_cost: DC,
     parent: Option<Arc<Self>>,
-    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    solutions: Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>,
     pub conflicts: Vec<Arc<Conflict<S, A, C, DC>>>,
-    constraint: Option<Arc<Constraint<S, C>>>,
-    landmark: Option<A2<Arc<Constraint<S, C>>>>,
+    constraint: Option<Arc<Constraint<S, C, DC>>>,
+    landmark: Option<A2<Arc<Constraint<S, C, DC>>>>,
 }
 
 impl<S, A, C, DC> Default for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn default() -> Self {
@@ -957,10 +997,10 @@ where
 impl<S, A, C, DC> CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
-    pub fn new(parent: Arc<Self>, constraint: Arc<Constraint<S, C>>) -> Self {
+    pub fn new(parent: Arc<Self>, constraint: Arc<Constraint<S, C, DC>>) -> Self {
         Self {
             total_cost: parent.total_cost,
             parent: Some(parent),
@@ -982,7 +1022,10 @@ where
         }
     }
 
-    pub fn get_constraints(&self, agent: usize) -> (Arc<ConstraintSet<S, C>>, LandmarkSet<S, C>) {
+    pub fn get_constraints(
+        &self,
+        agent: usize,
+    ) -> (Arc<ConstraintSet<S, C, DC>>, LandmarkSet<S, C, DC>) {
         let mut constraints = ConstraintSet::default();
         let mut landmarks = LandmarkSet::default();
 
@@ -1016,7 +1059,7 @@ where
     pub fn get_constraints_alt(
         &self,
         agent: usize,
-    ) -> (ConstraintSet<S, C>, Vec<A2<Arc<Constraint<S, C>>>>) {
+    ) -> (ConstraintSet<S, C, DC>, Vec<A2<Arc<Constraint<S, C, DC>>>>) {
         let mut constraints = ConstraintSet::default();
         let mut landmarks = vec![];
 
@@ -1045,7 +1088,10 @@ where
         (constraints, landmarks)
     }
 
-    pub fn get_solutions(&self, n_agents: usize) -> Vec<&Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    pub fn get_solutions(
+        &self,
+        n_agents: usize,
+    ) -> Vec<&Solution<Arc<SippState<S, C, DC>>, A, C, DC>> {
         let mut found = 0;
         let mut solutions = vec![None; n_agents];
 
@@ -1080,7 +1126,10 @@ where
         solutions.into_iter().map(|s| s.unwrap()).collect()
     }
 
-    fn contains_landmark(&self, landmark: T2<&Constraint<S, C>, &Constraint<S, C>>) -> bool {
+    fn contains_landmark(
+        &self,
+        landmark: T2<&Constraint<S, C, DC>, &Constraint<S, C, DC>>,
+    ) -> bool {
         let mut current = self;
 
         loop {
@@ -1143,7 +1192,7 @@ where
 impl<S, A, C, DC> PartialEq for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -1154,7 +1203,7 @@ where
 impl<S, A, C, DC> Eq for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
 }
@@ -1162,7 +1211,7 @@ where
 impl<S, A, C, DC> PartialOrd for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -1173,7 +1222,7 @@ where
 impl<S, A, C, DC> Ord for CbsNode<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Ord + Default + LimitValues + Copy,
+    C: Debug + Ord + Default + LimitValues + Copy + Sub<C, Output = DC>,
     DC: PartialEq + Eq + PartialOrd + Ord + Default + Copy,
 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -1184,7 +1233,7 @@ where
 enum WorkLoad<S, A, C, DC>
 where
     S: Debug + State + Eq + Hash + Clone,
-    C: Debug + Default + Copy + Ord + LimitValues,
+    C: Debug + Default + Copy + Ord + LimitValues + Sub<C, Output = DC>,
     DC: Default + Copy + Ord,
 {
     Complete,

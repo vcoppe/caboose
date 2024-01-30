@@ -46,7 +46,7 @@ impl SimpleWorld {
 
     pub fn get_center_and_vel(
         &self,
-        m: &Move<SimpleState, GraphEdgeId, MyTime>,
+        m: &Move<SimpleState, GraphEdgeId, MyTime, MyTime>,
         initial_time: &MyTime,
     ) -> (Point2<f64>, Vector2<f64>) {
         let interval = &m.interval;
@@ -106,7 +106,7 @@ impl TransitionSystem<SimpleState, GraphEdgeId, MyTime, MyTime> for SimpleWorld 
         true
     }
 
-    fn conflict(&self, moves: A2<&Move<SimpleState, GraphEdgeId, MyTime>>) -> bool {
+    fn conflict(&self, moves: A2<&Move<SimpleState, GraphEdgeId, MyTime, MyTime>>) -> bool {
         let initial_time = moves[0].interval.start.max(moves[1].interval.start);
         let max_time = moves[0].interval.end.min(moves[1].interval.end) - initial_time;
 

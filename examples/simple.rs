@@ -10,8 +10,9 @@ use ordered_float::OrderedFloat;
 struct Model {
     agent_size: f64,
     graph: Arc<Graph<SimpleNodeData, SimpleEdgeData>>,
-    solution:
-        Option<Vec<Solution<Arc<SippState<SimpleState, MyTime>>, GraphEdgeId, MyTime, MyTime>>>,
+    solution: Option<
+        Vec<Solution<Arc<SippState<SimpleState, MyTime, MyTime>>, GraphEdgeId, MyTime, MyTime>>,
+    >,
     start_time: f32,
     colors: Vec<rgb::Rgb<nannou::color::encoding::Srgb, u8>>,
     limits: ((f32, f32), (f32, f32)),

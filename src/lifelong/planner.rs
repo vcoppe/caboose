@@ -31,13 +31,22 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug
+        + Hash
+        + Ord
+        + Add<DC, Output = DC>
+        + Sub<DC, Output = DC>
+        + Div<f64, Output = DC>
+        + Copy
+        + Default
+        + Send
+        + Sync,
     H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
 {
     transition_system: Arc<TS>,
     solver: ConflictBasedSearch<TS, S, A, C, DC, H>,
     tasks: Vec<Arc<Task<S, C>>>,
-    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
+    solutions: Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>,
     heuristic_to_pivots: Vec<Arc<ReverseResumableAStar<TS, S, A, C, DC, H>>>,
     collision_precision: DC,
 }
@@ -60,7 +69,16 @@ where
         + LimitValues
         + Send
         + Sync,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Div<f64, Output = DC> + Copy + Default + Send + Sync,
+    DC: Debug
+        + Hash
+        + Ord
+        + Add<DC, Output = DC>
+        + Sub<DC, Output = DC>
+        + Div<f64, Output = DC>
+        + Copy
+        + Default
+        + Send
+        + Sync,
     H: Heuristic<TS, S, A, C, DC> + MinimalHeuristic<TS, S, A, C, DC> + Send + Sync,
 {
     pub fn new(
@@ -114,7 +132,7 @@ where
     pub fn plan(
         &mut self,
         config: &LifelongConfig<S, C>,
-    ) -> Option<&Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>> {
+    ) -> Option<&Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>> {
         for (agent, task) in &config.tasks {
             self.tasks[*agent] = task.clone();
             self.heuristic_to_pivots[*agent] = Arc::new(ReverseResumableAStar::new(

@@ -32,14 +32,16 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Copy + Default,
+    DC: Debug + Hash + Ord + Sub<DC, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     sipp: SafeIntervalPathPlanning<TS, S, A, C, DC, DifferentialHeuristic<TS, S, A, C, DC, H>>,
-    solutions: Vec<Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    solution_parts:
-        FxHashMap<((Arc<SippState<S, C>>, C), usize), Solution<Arc<SippState<S, C>>, A, C, DC>>,
-    landmark_states: Vec<Arc<SippState<S, C>>>,
+    solutions: Vec<Solution<Arc<SippState<S, C, DC>>, A, C, DC>>,
+    solution_parts: FxHashMap<
+        ((Arc<SippState<S, C, DC>>, C), usize),
+        Solution<Arc<SippState<S, C, DC>>, A, C, DC>,
+    >,
+    landmark_states: Vec<Arc<SippState<S, C, DC>>>,
     landmark_times: Vec<C>,
     stats: LSippStats,
 }
@@ -60,7 +62,7 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Debug + Ord + Sub<DC, Output = DC> + Copy + Default,
+    DC: Debug + Hash + Ord + Sub<DC, Output = DC> + Copy + Default,
     H: Heuristic<TS, S, A, C, DC>,
 {
     /// Creates a new instance of the Safe Interval Path Planning algorithm with landmarks.
@@ -88,7 +90,7 @@ where
     pub fn solve(
         &mut self,
         config: &LSippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    ) -> Option<Solution<Arc<SippState<S, C, DC>>, A, C, DC>> {
         self.init();
 
         let solution = if config.landmarks.is_empty() {
@@ -209,7 +211,7 @@ where
     fn get_solution(
         &mut self,
         config: &LSippConfig<TS, S, A, C, DC, H>,
-    ) -> Option<Solution<Arc<SippState<S, C>>, A, C, DC>> {
+    ) -> Option<Solution<Arc<SippState<S, C, DC>>, A, C, DC>> {
         if self.solutions.is_empty() {
             return None;
         }
@@ -278,12 +280,12 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Copy,
+    DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
     task: Arc<Task<S, C>>,
-    constraints: Arc<ConstraintSet<S, C>>,
-    landmarks: LandmarkSet<S, C>,
+    constraints: Arc<ConstraintSet<S, C, DC>>,
+    landmarks: LandmarkSet<S, C, DC>,
     /// A set of pivot states.
     pivots: Arc<Vec<S>>,
     /// A set of heuristics to those pivot states.
@@ -305,13 +307,13 @@ where
         + Copy
         + Default
         + LimitValues,
-    DC: Copy,
+    DC: Copy + PartialEq + Eq + PartialOrd + Ord,
     H: Heuristic<TS, S, A, C, DC>,
 {
     pub fn new(
         task: Arc<Task<S, C>>,
-        constraints: Arc<ConstraintSet<S, C>>,
-        landmarks: LandmarkSet<S, C>,
+        constraints: Arc<ConstraintSet<S, C, DC>>,
+        landmarks: LandmarkSet<S, C, DC>,
         heuristic: Arc<H>,
         precision: DC,
     ) -> Self {
@@ -328,8 +330,8 @@ where
 
     pub fn new_with_pivots(
         task: Arc<Task<S, C>>,
-        constraints: Arc<ConstraintSet<S, C>>,
-        landmarks: LandmarkSet<S, C>,
+        constraints: Arc<ConstraintSet<S, C, DC>>,
+        landmarks: LandmarkSet<S, C, DC>,
         pivots: Arc<Vec<S>>,
         heuristic_to_pivots: Arc<Vec<Arc<H>>>,
         precision: DC,
