@@ -2,8 +2,8 @@
 
 [![Crates.io](https://img.shields.io/crates/v/caboose)](https://crates.io/crates/caboose)
 [![Documentation](https://img.shields.io/badge/Docs.rs-Latest-informational)](https://docs.rs/caboose/)
-[![Rust](https://github.com/vcoppe/cbs/actions/workflows/rust.yml/badge.svg)](https://github.com/vcoppe/cbs/actions?query=workflow%3A%22Rust%22)
-[![codecov](https://codecov.io/gh/vcoppe/cbs/graph/badge.svg?token=219FLVZLS6)](https://codecov.io/gh/vcoppe/cbs)
+[![Rust](https://github.com/vcoppe/caboose/actions/workflows/rust.yml/badge.svg)](https://github.com/vcoppe/caboose/actions?query=workflow%3A%22Rust%22)
+[![codecov](https://codecov.io/gh/vcoppe/caboose/graph/badge.svg?token=219FLVZLS6)](https://codecov.io/gh/vcoppe/caboose)
 [![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 CaBooSe (Conflict-Based Search), a library implementing the *Continuous Conflict-Based Search*[^1][^2][^3] algorithm (CCBS) for the *Multi-Agent Path Finding* problem (MAPF), but **generic**, **parallel** and in **Rust**.
