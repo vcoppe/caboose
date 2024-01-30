@@ -1,5 +1,7 @@
 # Caboose
 
+[![Crates.io](https://img.shields.io/crates/v/caboose)](https://crates.io/crates/caboose)
+[![Documentation](https://img.shields.io/badge/Docs.rs-Latest-informational)](https://docs.rs/caboose/)
 [![Rust](https://github.com/vcoppe/cbs/actions/workflows/rust.yml/badge.svg)](https://github.com/vcoppe/cbs/actions?query=workflow%3A%22Rust%22)
 [![codecov](https://codecov.io/gh/vcoppe/cbs/graph/badge.svg?token=219FLVZLS6)](https://codecov.io/gh/vcoppe/cbs)
 [![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

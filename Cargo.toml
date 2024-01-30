@@ -1,6 +1,6 @@
 [package]
 name = "caboose"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 description = "A generic and parallel implementation of Continuous Conflict-Based Search algorithm for Multi-Agent Path Finding."
 repository = "https://github.com/vcoppe/caboose"
@@ -19,7 +19,7 @@ num_cpus = "1.16.0"
 ordered-float = "4.2.0"
 parking_lot = "0.12.1"
 quick-xml = { version = "0.31.0", features = ["serialize"] }
-serde = { version = "1.0.195", features = ["derive"] }
+serde = { version = "1.0.196", features = ["derive"] }
 tuple = "0.5.2"
 
 [dev-dependencies]
